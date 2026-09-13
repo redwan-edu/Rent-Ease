@@ -158,6 +158,7 @@ export default function ArchiveRecord({
                       <div className="row-sub">
                         Paid {dateLabel(p.paidOn)}
                         {p.note ? ` · ${p.note}` : ""}
+                        {p.recordedByName ? ` · by ${p.recordedByName}` : ""}
                       </div>
                     </div>
                     <span className="row-amount">{money(p.amount)}</span>

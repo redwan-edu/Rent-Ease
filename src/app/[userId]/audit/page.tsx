@@ -64,6 +64,8 @@ function StatusBadge({ tenant }: { tenant: TenantRow }) {
  */
 export default function AuditPage() {
   const { workspace, can, money, to, clampMonth } = useWorkspace();
+  // Members limited to certain properties can't add properties or leave tenants unplaced.
+  const canAdd = can("edit") && !workspace.restricted;
   const [month, setMonth] = useState(() => clampMonth(monthKey()));
   const [filter, setFilter] = useState<Filter>("all");
   const data = useQuery(api.audit.overview, { workspaceId: workspace.workspaceId, month });
@@ -132,7 +134,7 @@ export default function AuditPage() {
       <Header
         title="Audit"
         actions={
-          can("edit") && (
+          canAdd && (
             <button className="icon-btn dark" onClick={newProperty} aria-label="Add property">
               <Plus size={20} />
             </button>
@@ -187,7 +189,7 @@ export default function AuditPage() {
               title="Nothing to audit yet"
               text="Add a property with its units, then place tenants in them."
               action={
-                can("edit") && (
+                canAdd && (
                   <button className="btn btn-primary btn-sm" onClick={newProperty}>
                     <Plus size={16} /> Add property
                   </button>
@@ -363,7 +365,7 @@ export default function AuditPage() {
                   </span>
                   <div className="row-main">{action.tenant.unitId ? "Move to another unit" : "Place in a unit"}</div>
                 </button>
-                {action.tenant.propertyId && (
+                {action.tenant.propertyId && !workspace.restricted && (
                   <button
                     className="row"
                     onClick={() => {

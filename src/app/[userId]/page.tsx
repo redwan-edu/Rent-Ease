@@ -60,6 +60,7 @@ export default function Dashboard() {
           <div className="banner">
             <Users size={16} />
             {workspace.name}&apos;s workspace · {roleLabel[workspace.role]}
+            {workspace.restricted && " · your properties only"}
           </div>
         )}
 
@@ -124,12 +125,14 @@ export default function Dashboard() {
               </span>
               New tenant
             </Link>
-            <Link href={to("/properties?new=1")}>
-              <span className="qa-icon">
-                <Building2 size={17} />
-              </span>
-              New property
-            </Link>
+            {!workspace.restricted && (
+              <Link href={to("/properties?new=1")}>
+                <span className="qa-icon">
+                  <Building2 size={17} />
+                </span>
+                New property
+              </Link>
+            )}
             <Link href={to("/notes?new=1")}>
               <span className="qa-icon">
                 <NotebookPen size={17} />

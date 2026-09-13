@@ -13,10 +13,12 @@ import { useWorkspace } from "@/lib/workspace";
 
 export default function PropertiesPage() {
   const { workspace, can, money, to } = useWorkspace();
+  // Members limited to certain properties can't add new ones.
+  const canAdd = can("edit") && !workspace.restricted;
   const properties = useQuery(api.properties.list, { workspaceId: workspace.workspaceId });
   // "/properties?new=1" (from the dashboard) opens the add sheet straight away.
   const [adding, setAdding] = useState(
-    () => new URLSearchParams(window.location.search).has("new") && can("edit"),
+    () => new URLSearchParams(window.location.search).has("new") && canAdd,
   );
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function PropertiesPage() {
       <Header
         title="Properties"
         actions={
-          can("edit") && (
+          canAdd && (
             <button className="icon-btn dark" onClick={() => setAdding(true)} aria-label="Add property">
               <Plus size={20} />
             </button>
@@ -49,7 +51,7 @@ export default function PropertiesPage() {
               title="No properties yet"
               text="Add your villas, houses or apartments, then assign tenants to them."
               action={
-                can("edit") && (
+                canAdd && (
                   <button className="btn btn-primary btn-sm" onClick={() => setAdding(true)}>
                     <Plus size={16} /> Add property
                   </button>

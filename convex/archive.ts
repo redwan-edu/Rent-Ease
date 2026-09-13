@@ -1,7 +1,15 @@
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
-import { access, checkPlacement, clean, tryAccess } from "./lib";
+import {
+  access,
+  assertProperty,
+  assertTenant,
+  checkPlacement,
+  clean,
+  seesProperty,
+  tryAccess,
+} from "./lib";
 
 /**
  * The archive is the safety net behind "delete tenant". Moving a tenant out
@@ -21,7 +29,9 @@ export const list = query({
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .order("desc")
       .collect();
-    return rows.map((r) => ({
+    return rows
+      .filter((r) => seesProperty(a, (r.tenant as Doc<"tenants">).propertyId))
+      .map((r) => ({
       _id: r._id,
       name: r.name,
       phone: r.phone,
@@ -47,13 +57,19 @@ export const get = query({
     const r = await ctx.db.get(archiveId);
     if (!r) return null;
     const a = await tryAccess(ctx, r.workspaceId);
-    if (!a) return null;
-
     const tenant = r.tenant as Doc<"tenants">;
+    if (!a || !seesProperty(a, tenant.propertyId)) return null;
+
     const family = r.family as Doc<"familyMembers">[];
     const payments = r.payments as Doc<"payments">[];
     const notes = r.notes as Doc<"notes">[];
     const url = async (id?: Id<"_storage">) => (id ? await ctx.storage.getUrl(id) : null);
+    const names = new Map<string, string | null>();
+    const nameOf = async (id?: Id<"users">) => {
+      if (!id) return null;
+      if (!names.has(id)) names.set(id, (await ctx.db.get(id))?.name ?? null);
+      return names.get(id) ?? null;
+    };
 
     return {
       _id: r._id,
@@ -86,8 +102,12 @@ export const get = query({
           ),
         })),
       ),
-      payments: [...payments].sort((x, y) =>
-        x.month === y.month ? y.paidOn.localeCompare(x.paidOn) : y.month.localeCompare(x.month),
+      payments: await Promise.all(
+        [...payments]
+          .sort((x, y) =>
+            x.month === y.month ? y.paidOn.localeCompare(x.paidOn) : y.month.localeCompare(x.month),
+          )
+          .map(async (p) => ({ ...p, recordedByName: await nameOf(p.recordedBy) })),
       ),
       notes: notes.map((n) => ({ body: n.body, createdAt: n._creationTime, done: n.done })),
     };
@@ -104,7 +124,9 @@ export const archiveTenant = mutation({
   handler: async (ctx, { tenantId, reason }) => {
     const t = await ctx.db.get(tenantId);
     if (!t) throw new ConvexError("Tenant not found.");
-    const { me } = await access(ctx, t.workspaceId, "full");
+    const a = await access(ctx, t.workspaceId, "full");
+    assertTenant(a, t);
+    const { me } = a;
 
     const family = await ctx.db
       .query("familyMembers")
@@ -174,9 +196,9 @@ export const restore = mutation({
   handler: async (ctx, { archiveId }) => {
     const r = await ctx.db.get(archiveId);
     if (!r) throw new ConvexError("That archived tenant no longer exists.");
-    await access(ctx, r.workspaceId, "full");
-
+    const a = await access(ctx, r.workspaceId, "full");
     const tenant = r.tenant as Doc<"tenants">;
+    assertProperty(a, tenant.propertyId);
     const family = r.family as Doc<"familyMembers">[];
     const payments = r.payments as Doc<"payments">[];
     const notes = r.notes as Doc<"notes">[];
@@ -186,7 +208,14 @@ export const restore = mutation({
     let unitId = tenant.unitId;
     try {
       await checkPlacement(ctx, r.workspaceId, propertyId, unitId);
-    } catch {
+    } catch (e) {
+      // A restricted member can't see an unplaced tenant, so don't hide one from them.
+      if (a.scope !== null) {
+        throw new ConvexError(
+          `${tenant.name}'s old unit is gone or rented out. Ask the owner to restore them.`,
+        );
+      }
+      void e;
       propertyId = undefined;
       unitId = undefined;
     }
@@ -228,6 +257,7 @@ export const restore = mutation({
         amount: p.amount,
         paidOn: p.paidOn,
         note: p.note,
+        recordedBy: p.recordedBy,
       });
     }
     for (const n of notes) {

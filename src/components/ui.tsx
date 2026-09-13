@@ -15,22 +15,9 @@ import { errorMessage, hue, initials } from "@/lib/format";
 
 export function Logo({ size = 44 }: { size?: number }) {
   return (
-    <span className="logo" style={{ width: size, height: size, borderRadius: size * 0.3 }}>
-      <svg
-        width={size * 0.55}
-        height={size * 0.55}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-      >
-        <path d="M3 10.5 12 3l9 7.5" />
-        <path d="M5 9.5V20h14V9.5" />
-        <circle cx="12" cy="14" r="2.2" fill="#86d8ab" stroke="none" />
-      </svg>
+    <span className="logo" style={{ width: size, height: size }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo.png" alt="" width={size} height={size} draggable={false} />
     </span>
   );
 }

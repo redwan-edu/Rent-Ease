@@ -4,7 +4,8 @@ import AuthScreen from "@/components/AuthScreen";
 export default function SignInPage() {
   return (
     <AuthScreen>
-      <SignIn />
+      {/* Path routing keeps "Forgot password?" and the reset steps on /sign-in/… */}
+      <SignIn path="/sign-in" routing="path" signUpUrl="/sign-up" />
     </AuthScreen>
   );
 }

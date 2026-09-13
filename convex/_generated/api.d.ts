@@ -15,6 +15,7 @@ import type * as files from "../files.js";
 import type * as lib from "../lib.js";
 import type * as members from "../members.js";
 import type * as notes from "../notes.js";
+import type * as notifications from "../notifications.js";
 import type * as payments from "../payments.js";
 import type * as properties from "../properties.js";
 import type * as push from "../push.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   lib: typeof lib;
   members: typeof members;
   notes: typeof notes;
+  notifications: typeof notifications;
   payments: typeof payments;
   properties: typeof properties;
   push: typeof push;

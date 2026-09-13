@@ -9,8 +9,9 @@ const PUBLIC_PATHS = [
   /^\/sign-up(\/|$)/,
   /^\/manifest\.webmanifest$/,
   /^\/sw\.js$/,
-  /^\/icon(-\d+)?$/, // /icon, /icon-192, /icon-512
-  /^\/apple-icon$/,
+  /^\/(icon|apple-icon)(\.png)?$/, // favicon + home-screen icon
+  /^\/logo\.png$/,
+  /^\/join$/, // invite links: the page itself asks visitors to sign in
 ];
 
 function isPublic(req: NextRequest) {
@@ -25,9 +26,13 @@ function isPublic(req: NextRequest) {
 // query and mutation re-checks the signed-in user itself (see convex/lib.ts),
 // which is the resource-based check Clerk now recommends and the one that
 // actually gates the data.
-export default clerkMiddleware(async (auth, req) => {
-  if (!isPublic(req)) await auth.protect();
-});
+export default clerkMiddleware(
+  async (auth, req) => {
+    if (!isPublic(req)) await auth.protect();
+  },
+  // Signed-out visitors go to our own /sign-in, not Clerk's hosted page.
+  { signInUrl: "/sign-in", signUpUrl: "/sign-up" },
+);
 
 export const config = {
   matcher: [

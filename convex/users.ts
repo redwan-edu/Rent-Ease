@@ -13,20 +13,27 @@ export const store = mutation({
     const name =
       identity.name?.trim() || identity.givenName || email.split("@")[0] || "Owner";
     const imageUrl = identity.pictureUrl;
+    const emailVerified = identity.emailVerified;
 
     const existing = await ctx.db
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
     if (existing) {
-      if (existing.email !== email || existing.name !== name || existing.imageUrl !== imageUrl) {
-        await ctx.db.patch(existing._id, { email, name, imageUrl });
+      if (
+        existing.email !== email ||
+        existing.name !== name ||
+        existing.imageUrl !== imageUrl ||
+        existing.emailVerified !== emailVerified
+      ) {
+        await ctx.db.patch(existing._id, { email, name, imageUrl, emailVerified });
       }
       return existing._id;
     }
     return await ctx.db.insert("users", {
       tokenIdentifier: identity.tokenIdentifier,
       email,
+      emailVerified,
       name,
       imageUrl,
     });

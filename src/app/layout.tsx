@@ -29,7 +29,16 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: fontScaleBootScript }} />
       </head>
       <body>
-        <ClerkProvider appearance={clerkAppearance}>
+        {/* Keep every auth step — sign up, email codes, forgot/reset password — inside
+            the app instead of Clerk's hosted pages, and land in /app afterwards. */}
+        <ClerkProvider
+          appearance={clerkAppearance}
+          signInUrl="/sign-in"
+          signUpUrl="/sign-up"
+          signInFallbackRedirectUrl="/app"
+          signUpFallbackRedirectUrl="/app"
+          afterSignOutUrl="/"
+        >
           <ConvexClientProvider>
             <div className="device">
               <div className="screen">{children}</div>

@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
-import { getMe } from "./lib";
+import { getMe, noteVisible, seesProperty } from "./lib";
 
 export const subscribe = mutation({
   args: { endpoint: v.string(), p256dh: v.string(), auth: v.string() },
@@ -38,13 +38,20 @@ export const forNote = internalQuery({
       .query("members")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", note.workspaceId))
       .collect();
+    const tenant = note.tenantId ? await ctx.db.get(note.tenantId) : null;
     const userIds: Id<"users">[] = [note.workspaceId];
     for (const m of members) {
       const u = await ctx.db
         .query("users")
         .withIndex("by_email", (q) => q.eq("email", m.email))
         .first();
-      if (u) userIds.push(u._id);
+      // Same rules as the app: verified address, and the note is in their scope.
+      if (!u || u.emailVerified !== true) continue;
+      const scope = m.propertyIds ? new Set<string>(m.propertyIds) : null;
+      const visibleTenants = new Set<string>(
+        tenant && seesProperty({ scope }, tenant.propertyId) ? [tenant._id] : [],
+      );
+      if (noteVisible(scope, u._id, visibleTenants, note)) userIds.push(u._id);
     }
     const subs = (
       await Promise.all(
@@ -56,7 +63,6 @@ export const forNote = internalQuery({
         ),
       )
     ).flat();
-    const tenant = note.tenantId ? await ctx.db.get(note.tenantId) : null;
     const body = note.body.length > 140 ? `${note.body.slice(0, 137)}…` : note.body;
     return {
       workspaceId: note.workspaceId,

@@ -8,7 +8,15 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { access, tryAccess } from "./lib";
+import {
+  access,
+  assertProperty,
+  assertTenant,
+  noteFilter,
+  tryAccess,
+  type Access,
+  type Role,
+} from "./lib";
 
 const fields = {
   body: v.string(),
@@ -29,6 +37,7 @@ async function enrich(ctx: QueryCtx, notes: Doc<"notes">[]) {
 
 async function checkLinks(
   ctx: MutationCtx,
+  a: Access,
   workspaceId: Id<"users">,
   tenantId?: Id<"tenants">,
   propertyId?: Id<"properties">,
@@ -36,11 +45,20 @@ async function checkLinks(
   if (tenantId) {
     const t = await ctx.db.get(tenantId);
     if (!t || t.workspaceId !== workspaceId) throw new ConvexError("Tenant not found.");
+    assertTenant(a, t);
   }
   if (propertyId) {
     const p = await ctx.db.get(propertyId);
     if (!p || p.workspaceId !== workspaceId) throw new ConvexError("Property not found.");
+    assertProperty(a, propertyId);
   }
+}
+
+/** Throws unless the caller has `need` and the note is within their property scope. */
+async function noteAccess(ctx: MutationCtx, note: Doc<"notes">, need: Role) {
+  const a = await access(ctx, note.workspaceId, need);
+  if (!(await noteFilter(ctx, a, note.workspaceId))(note)) throw new ConvexError("Note not found.");
+  return a;
 }
 
 async function schedule(ctx: MutationCtx, noteId: Id<"notes">, remindAt?: number) {
@@ -64,7 +82,8 @@ export const list = query({
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .order("desc")
       .collect();
-    return enrich(ctx, notes.filter((n) => n.done === done));
+    const visible = await noteFilter(ctx, a, workspaceId);
+    return enrich(ctx, notes.filter((n) => n.done === done && visible(n)));
   },
 });
 
@@ -78,37 +97,22 @@ export const upcoming = query({
       .query("notes")
       .withIndex("by_workspace_fired", (q) => q.eq("workspaceId", workspaceId).eq("fired", false))
       .collect();
+    const visible = await noteFilter(ctx, a, workspaceId);
     const pending = notes
-      .filter((n) => !n.done && n.remindAt)
+      .filter((n) => !n.done && n.remindAt && visible(n))
       .sort((x, y) => x.remindAt! - y.remindAt!)
       .slice(0, 3);
     return enrich(ctx, pending);
   },
 });
 
-/** Reminders that are due: shown in the top-bar bell. */
-export const notifications = query({
-  args: { workspaceId: v.id("users") },
-  handler: async (ctx, { workspaceId }) => {
-    const a = await tryAccess(ctx, workspaceId);
-    if (!a) return { items: [], unseen: 0 };
-    const fired = await ctx.db
-      .query("notes")
-      .withIndex("by_workspace_fired", (q) => q.eq("workspaceId", workspaceId).eq("fired", true))
-      .collect();
-    const items = fired
-      .filter((n) => !n.done)
-      .sort((x, y) => (y.remindAt ?? 0) - (x.remindAt ?? 0));
-    return { items: await enrich(ctx, items), unseen: items.filter((n) => !n.seen).length };
-  },
-});
-
 export const create = mutation({
   args: { workspaceId: v.id("users"), ...fields },
   handler: async (ctx, { workspaceId, body, tenantId, propertyId, remindAt }) => {
-    const { me } = await access(ctx, workspaceId, "edit");
+    const a = await access(ctx, workspaceId, "edit");
+    const { me } = a;
     if (!body.trim()) throw new ConvexError("Write something first.");
-    await checkLinks(ctx, workspaceId, tenantId, propertyId);
+    await checkLinks(ctx, a, workspaceId, tenantId, propertyId);
     const noteId = await ctx.db.insert("notes", {
       workspaceId,
       body: body.trim(),
@@ -131,9 +135,9 @@ export const update = mutation({
   handler: async (ctx, { noteId, body, tenantId, propertyId, remindAt }) => {
     const note = await ctx.db.get(noteId);
     if (!note) throw new ConvexError("Note not found.");
-    await access(ctx, note.workspaceId, "edit");
+    const a = await noteAccess(ctx, note, "edit");
     if (!body.trim()) throw new ConvexError("Write something first.");
-    await checkLinks(ctx, note.workspaceId, tenantId, propertyId);
+    await checkLinks(ctx, a, note.workspaceId, tenantId, propertyId);
 
     const patch: Partial<Doc<"notes">> = { body: body.trim(), tenantId, propertyId };
     if (remindAt !== note.remindAt) {
@@ -152,7 +156,7 @@ export const setDone = mutation({
   handler: async (ctx, { noteId, done }) => {
     const note = await ctx.db.get(noteId);
     if (!note) return;
-    await access(ctx, note.workspaceId, "edit");
+    await noteAccess(ctx, note, "edit");
     await ctx.db.patch(noteId, { done, seen: true });
   },
 });
@@ -162,21 +166,9 @@ export const remove = mutation({
   handler: async (ctx, { noteId }) => {
     const note = await ctx.db.get(noteId);
     if (!note) return;
-    await access(ctx, note.workspaceId, "full");
+    await noteAccess(ctx, note, "full");
     await cancel(ctx, note);
     await ctx.db.delete(noteId);
-  },
-});
-
-export const markAllSeen = mutation({
-  args: { workspaceId: v.id("users") },
-  handler: async (ctx, { workspaceId }) => {
-    await access(ctx, workspaceId, "read");
-    const fired = await ctx.db
-      .query("notes")
-      .withIndex("by_workspace_fired", (q) => q.eq("workspaceId", workspaceId).eq("fired", true))
-      .collect();
-    for (const n of fired) if (!n.seen) await ctx.db.patch(n._id, { seen: true });
   },
 });
 

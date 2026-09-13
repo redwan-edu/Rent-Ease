@@ -18,40 +18,118 @@ export async function getMe(ctx: Ctx): Promise<Doc<"users"> | null> {
     .unique();
 }
 
-export async function roleIn(
+/**
+ * Which properties a member may see: null means all of them. Owners and
+ * unrestricted members get null; a restricted member gets exactly their list.
+ */
+export type Scope = Set<string> | null;
+
+export type Access = { me: Doc<"users">; role: Role; scope: Scope };
+
+async function membership(
   ctx: Ctx,
   me: Doc<"users">,
   workspaceId: Id<"users">,
-): Promise<Role | null> {
-  if (me._id === workspaceId) return "owner";
-  if (!me.email) return null;
+): Promise<{ role: Role; scope: Scope } | null> {
+  if (me._id === workspaceId) {
+    // Even your own workspace stays shut while Clerk reports the address unverified.
+    return me.emailVerified === false ? null : { role: "owner", scope: null };
+  }
+  // Team access is granted by email address, so it needs Clerk's explicit
+  // confirmation that this person has verified they own that address.
+  if (!me.email || me.emailVerified !== true) return null;
   const member = await ctx.db
     .query("members")
     .withIndex("by_workspace_email", (q) =>
       q.eq("workspaceId", workspaceId).eq("email", me.email),
     )
     .unique();
-  return member?.role ?? null;
+  if (!member) return null;
+  return { role: member.role, scope: member.propertyIds ? new Set(member.propertyIds) : null };
+}
+
+export async function roleIn(ctx: Ctx, me: Doc<"users">, workspaceId: Id<"users">) {
+  return (await membership(ctx, me, workspaceId))?.role ?? null;
 }
 
 /** For queries: returns null instead of throwing so the UI can render empty states. */
-export async function tryAccess(ctx: Ctx, workspaceId: Id<"users">) {
+export async function tryAccess(ctx: Ctx, workspaceId: Id<"users">): Promise<Access | null> {
   const me = await getMe(ctx);
   if (!me) return null;
-  const role = await roleIn(ctx, me, workspaceId);
-  if (!role) return null;
-  return { me, role };
+  const m = await membership(ctx, me, workspaceId);
+  if (!m) return null;
+  return { me, ...m };
 }
 
 /** For mutations: throws unless the caller has at least `need` in the workspace. */
-export async function access(ctx: Ctx, workspaceId: Id<"users">, need: Role) {
+export async function access(ctx: Ctx, workspaceId: Id<"users">, need: Role): Promise<Access> {
   const me = await getMe(ctx);
   if (!me) throw new ConvexError("You are not signed in.");
-  const role = await roleIn(ctx, me, workspaceId);
-  if (!role || rank[role] < rank[need]) {
+  const m = await membership(ctx, me, workspaceId);
+  if (!m || rank[m.role] < rank[need]) {
     throw new ConvexError("You don't have permission to do that.");
   }
-  return { me, role };
+  return { me, ...m };
+}
+
+/* ─── Property scope ─── */
+
+export function seesProperty(a: Pick<Access, "scope">, propertyId?: Id<"properties"> | null) {
+  return a.scope === null || (!!propertyId && a.scope.has(propertyId));
+}
+
+/** A tenant is visible when the property they're placed in is. */
+export function seesTenant(a: Pick<Access, "scope">, t: Doc<"tenants">) {
+  return seesProperty(a, t.propertyId);
+}
+
+export function assertProperty(a: Access, propertyId?: Id<"properties"> | null) {
+  if (!seesProperty(a, propertyId)) throw new ConvexError("You don't have access to this property.");
+}
+
+export function assertTenant(a: Access, t: Doc<"tenants">) {
+  if (!seesTenant(a, t)) throw new ConvexError("You don't have access to this tenant.");
+}
+
+/**
+ * A restricted member can only put tenants inside their own properties —
+ * anywhere else (including "not assigned") the tenant would vanish from view.
+ */
+export function assertPlacement(a: Access, propertyId?: Id<"properties">) {
+  if (a.scope !== null && (!propertyId || !a.scope.has(propertyId))) {
+    throw new ConvexError("Place this tenant in one of the properties assigned to you.");
+  }
+}
+
+/** Restricted members only work on properties they were given. */
+export function assertUnrestricted(a: Access) {
+  if (a.scope !== null) {
+    throw new ConvexError("You only have access to specific properties. Ask the owner to add new ones.");
+  }
+}
+
+/**
+ * Who can see a note under a property scope: notes about a visible tenant or
+ * property, plus general notes the member wrote themselves.
+ */
+export function noteVisible(
+  scope: Scope,
+  userId: Id<"users">,
+  visibleTenants: Set<string>,
+  n: Doc<"notes">,
+) {
+  if (scope === null) return true;
+  if (n.tenantId) return visibleTenants.has(n.tenantId);
+  if (n.propertyId) return scope.has(n.propertyId);
+  return n.createdBy === userId;
+}
+
+/** A filter for notes the caller may see; cheap when they see everything. */
+export async function noteFilter(ctx: Ctx, a: Access, workspaceId: Id<"users">) {
+  if (a.scope === null) return () => true;
+  const { all } = await allTenants(ctx, workspaceId);
+  const visible = new Set<string>(all.filter((t) => seesTenant(a, t)).map((t) => t._id));
+  return (n: Doc<"notes">) => noteVisible(a.scope, a.me._id, visible, n);
 }
 
 /** The active tenant renting a unit, if any. */

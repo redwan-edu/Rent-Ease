@@ -37,7 +37,7 @@ import { useWorkspace } from "@/lib/workspace";
 export default function TenantPage() {
   const { id } = useParams<{ id: string }>();
   const tenantId = id as Id<"tenants">;
-  const tenant = useQuery(api.tenants.get, { tenantId });
+  const tenant = useQuery(api.tenants.get, { tenantId, month: monthKey() });
   const { can, money, to } = useWorkspace();
   const moveOut = useMutation(api.tenants.moveOut);
   const reactivate = useMutation(api.tenants.reactivate);
@@ -70,9 +70,9 @@ export default function TenantPage() {
     );
   }
 
-  const month = monthKey();
-  const paidThisMonth = tenant.payments.filter((p) => p.month === month).reduce((s, p) => s + p.amount, 0);
-  const remaining = Math.max(0, tenant.rent - paidThisMonth);
+  // Paid / due is always about the running month, and only if they rent in it.
+  const { month, owes, remaining } = tenant.thisMonth;
+  const monthName = monthLabel(month).split(" ")[0];
   const active = tenant.status === "active";
   const digits = tenant.phone.replace(/[^\d]/g, "");
   const docItems: GalleryItem[] = tenant.documents.map((d) => ({
@@ -147,9 +147,12 @@ export default function TenantPage() {
             <span className="stat-value">{tenant.residents}</span>
           </div>
           <div className="stat">
-            <span className="stat-label">{remaining === 0 ? "This month" : "Due now"}</span>
-            <span className="stat-value" style={{ color: remaining === 0 ? "var(--accent)" : "var(--warn)" }}>
-              {remaining === 0 ? "Paid" : money(remaining)}
+            <span className="stat-label">{owes && remaining > 0 ? `Due · ${monthName}` : monthName}</span>
+            <span
+              className="stat-value"
+              style={{ color: !owes ? "var(--ink-3)" : remaining === 0 ? "var(--accent)" : "var(--warn)" }}
+            >
+              {!owes ? "Not due" : remaining === 0 ? "Paid" : money(remaining)}
             </span>
           </div>
         </div>
@@ -294,6 +297,7 @@ export default function TenantPage() {
                     <div className="row-sub">
                       Paid {dateLabel(p.paidOn)}
                       {p.note ? ` · ${p.note}` : ""}
+                      {p.recordedByName ? ` · by ${p.recordedByName}` : ""}
                     </div>
                   </div>
                   <span className="row-amount">{money(p.amount)}</span>
@@ -351,45 +355,39 @@ export default function TenantPage() {
             <h3>Ending this tenancy</h3>
             {active
               ? can("full") && (
-                  <>
+                  <div className="dz-part">
                     <p>
                       Moving out keeps {tenant.name} in your tenant list as a former tenant —
                       every payment, document and note stays exactly where it is.
                     </p>
-                    <button className="btn btn-danger btn-block" onClick={() => setConfirmMoveOut(true)}>
+                    <button className="btn btn-caution btn-block" onClick={() => setConfirmMoveOut(true)}>
                       <LogOut size={17} /> Move out tenant
                     </button>
-                  </>
+                  </div>
                 )
               : can("edit") && (
-                  <>
-                    <p>
-                      {tenant.name} is a former tenant. Their full history is kept here.
-                    </p>
+                  <div className="dz-part">
+                    <p>{tenant.name} is a former tenant. Their full history is kept here.</p>
                     <button
                       className="btn btn-secondary btn-block"
                       onClick={() => run(() => reactivate({ tenantId }), "Tenant is current again")}
                     >
                       <RotateCcw size={17} /> Mark as current tenant
                     </button>
-                  </>
+                  </div>
                 )}
             {can("full") && (
-              <>
-                <p style={{ marginTop: 6 }}>
+              <div className="dz-part">
+                <p>
                   Deleting takes {tenant.name} off your lists, but stores the complete record —
                   profile, family, {tenant.payments.length} payment
                   {tenant.payments.length === 1 ? "" : "s"}, notes and every uploaded file — in the
                   Archive, so you keep the proof.
                 </p>
-                <button
-                  className="btn btn-ghost btn-block"
-                  style={{ color: "var(--danger)" }}
-                  onClick={() => setConfirmDelete(true)}
-                >
+                <button className="btn btn-destructive btn-block" onClick={() => setConfirmDelete(true)}>
                   <Archive size={17} /> Delete &amp; archive tenant
                 </button>
-              </>
+              </div>
             )}
           </div>
         )}

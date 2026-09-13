@@ -1,7 +1,20 @@
 import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx } from "./_generated/server";
-import { access, checkPlacement, clean, tryAccess, unitOccupant } from "./lib";
+import {
+  access,
+  assertPlacement,
+  assertTenant,
+  checkPlacement,
+  clean,
+  inRentWindow,
+  monthOf,
+  seesTenant,
+  startMonthOf,
+  tryAccess,
+  unitOccupant,
+  type Access,
+} from "./lib";
 
 const MAX_DOCUMENTS = 10;
 
@@ -39,6 +52,7 @@ type Fields = {
 
 async function normalize(
   ctx: MutationCtx,
+  a: Access,
   workspaceId: Id<"users">,
   f: Fields,
   tenantId?: Id<"tenants">,
@@ -54,6 +68,7 @@ async function normalize(
   if (f.documents.length > MAX_DOCUMENTS) {
     throw new ConvexError(`You can attach up to ${MAX_DOCUMENTS} documents.`);
   }
+  assertPlacement(a, f.propertyId);
   await checkPlacement(ctx, workspaceId, f.propertyId, f.unitId, tenantId);
   return {
     name,
@@ -81,13 +96,16 @@ export const list = query({
   handler: async (ctx, { workspaceId, status, month }) => {
     const a = await tryAccess(ctx, workspaceId);
     if (!a) return [];
-    const tenants = await ctx.db
-      .query("tenants")
-      .withIndex("by_workspace_status", (q) =>
-        q.eq("workspaceId", workspaceId).eq("status", status),
-      )
-      .order("desc")
-      .collect();
+    const startMonth = await startMonthOf(ctx, workspaceId);
+    const tenants = (
+      await ctx.db
+        .query("tenants")
+        .withIndex("by_workspace_status", (q) =>
+          q.eq("workspaceId", workspaceId).eq("status", status),
+        )
+        .order("desc")
+        .collect()
+    ).filter((t) => seesTenant(a, t));
     const payments = await ctx.db
       .query("payments")
       .withIndex("by_workspace_month", (q) => q.eq("workspaceId", workspaceId).eq("month", month))
@@ -110,18 +128,21 @@ export const list = query({
         photoUrl: t.photoId ? await ctx.storage.getUrl(t.photoId) : null,
         propertyName: t.propertyId ? ((await ctx.db.get(t.propertyId))?.name ?? null) : null,
         paid: paidBy.get(t._id) ?? 0,
+        // Paid/due only means something for a month they actually rent in.
+        owes: inRentWindow(t, startMonth, month),
       })),
     );
   },
 });
 
 export const get = query({
-  args: { tenantId: v.id("tenants") },
-  handler: async (ctx, { tenantId }) => {
+  // `month` is the caller's running month; paid/due status is only ever about it.
+  args: { tenantId: v.id("tenants"), month: v.optional(v.string()) },
+  handler: async (ctx, { tenantId, month }) => {
     const t = await ctx.db.get(tenantId);
     if (!t) return null;
     const a = await tryAccess(ctx, t.workspaceId);
-    if (!a) return null;
+    if (!a || !seesTenant(a, t)) return null;
     const property = t.propertyId ? await ctx.db.get(t.propertyId) : null;
     const unit = t.unitId ? await ctx.db.get(t.unitId) : null;
     const payments = await ctx.db
@@ -129,6 +150,15 @@ export const get = query({
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
       .collect();
     payments.sort((x, y) => (x.month === y.month ? y.paidOn.localeCompare(x.paidOn) : y.month.localeCompare(x.month)));
+    const current = month && /^\d{4}-\d{2}$/.test(month) ? month : monthOf(Date.now());
+    const paidNow = payments.filter((p) => p.month === current).reduce((s, p) => s + p.amount, 0);
+    const owesNow = inRentWindow(t, await startMonthOf(ctx, t.workspaceId), current);
+    const names = new Map<string, string | null>();
+    const nameOf = async (id?: Id<"users">) => {
+      if (!id) return null;
+      if (!names.has(id)) names.set(id, (await ctx.db.get(id))?.name ?? null);
+      return names.get(id) ?? null;
+    };
     const notes = await ctx.db
       .query("notes")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
@@ -143,7 +173,15 @@ export const get = query({
       documents,
       property: property ? { _id: property._id, name: property.name } : null,
       unit: unit ? { _id: unit._id, name: unit.name } : null,
-      payments,
+      payments: await Promise.all(
+        payments.map(async (p) => ({ ...p, recordedByName: await nameOf(p.recordedBy) })),
+      ),
+      thisMonth: {
+        month: current,
+        owes: owesNow,
+        paid: paidNow,
+        remaining: owesNow ? Math.max(0, t.rent - paidNow) : 0,
+      },
       notes,
       family: await Promise.all(
         (
@@ -171,8 +209,8 @@ export const get = query({
 export const create = mutation({
   args: { workspaceId: v.id("users"), ...fields },
   handler: async (ctx, { workspaceId, ...f }) => {
-    await access(ctx, workspaceId, "edit");
-    const data = await normalize(ctx, workspaceId, f);
+    const a = await access(ctx, workspaceId, "edit");
+    const data = await normalize(ctx, a, workspaceId, f);
     return await ctx.db.insert("tenants", { workspaceId, ...data, status: "active" });
   },
 });
@@ -182,8 +220,9 @@ export const update = mutation({
   handler: async (ctx, { tenantId, ...f }) => {
     const t = await ctx.db.get(tenantId);
     if (!t) throw new ConvexError("Tenant not found.");
-    await access(ctx, t.workspaceId, "edit");
-    const data = await normalize(ctx, t.workspaceId, f, tenantId);
+    const a = await access(ctx, t.workspaceId, "edit");
+    assertTenant(a, t);
+    const data = await normalize(ctx, a, t.workspaceId, f, tenantId);
 
     // Delete files that were removed from the tenant.
     const keep = new Set<string>([
@@ -203,7 +242,7 @@ export const moveOut = mutation({
   handler: async (ctx, { tenantId, date }) => {
     const t = await ctx.db.get(tenantId);
     if (!t) throw new ConvexError("Tenant not found.");
-    await access(ctx, t.workspaceId, "full");
+    assertTenant(await access(ctx, t.workspaceId, "full"), t);
     await ctx.db.patch(tenantId, { status: "former", moveOutDate: date });
   },
 });
@@ -213,10 +252,17 @@ export const reactivate = mutation({
   handler: async (ctx, { tenantId }) => {
     const t = await ctx.db.get(tenantId);
     if (!t) throw new ConvexError("Tenant not found.");
-    await access(ctx, t.workspaceId, "edit");
+    const a = await access(ctx, t.workspaceId, "edit");
+    assertTenant(a, t);
     // If their old unit has been rented out since, they come back unassigned.
     const occupant = t.unitId ? await unitOccupant(ctx, t.unitId) : null;
     const lostUnit = !!occupant && occupant._id !== tenantId;
+    // An unassigned tenant would vanish for a member limited to certain properties.
+    if (lostUnit && a.scope !== null) {
+      throw new ConvexError(
+        `Their old unit is now rented to ${occupant.name}. Edit ${t.name} and choose another unit first.`,
+      );
+    }
     await ctx.db.patch(tenantId, {
       status: "active",
       moveOutDate: undefined,

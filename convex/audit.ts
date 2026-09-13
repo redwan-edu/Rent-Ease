@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { query } from "./_generated/server";
-import { tryAccess } from "./lib";
+import { seesProperty, seesTenant, tryAccess } from "./lib";
 
 export type PayStatus = "paid" | "partial" | "due";
 
@@ -15,7 +15,7 @@ export const overview = query({
     const a = await tryAccess(ctx, workspaceId);
     if (!a) return null;
 
-    const [properties, units, tenants, payments] = await Promise.all([
+    const [allProperties, allUnits, allActive, allPayments] = await Promise.all([
       ctx.db
         .query("properties")
         .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
@@ -33,6 +33,14 @@ export const overview = query({
         .withIndex("by_workspace_month", (q) => q.eq("workspaceId", workspaceId).eq("month", month))
         .collect(),
     ]);
+
+    // Restricted members audit only the properties assigned to them.
+    const properties = allProperties.filter((p) => seesProperty(a, p._id));
+    const units = allUnits.filter((u) => seesProperty(a, u.propertyId));
+    const tenants = allActive.filter((t) => seesTenant(a, t));
+    const tenantIds = new Set<string>(tenants.map((t) => t._id));
+    const payments =
+      a.scope === null ? allPayments : allPayments.filter((p) => tenantIds.has(p.tenantId));
 
     const paidBy = new Map<string, number>();
     for (const p of payments) paidBy.set(p.tenantId, (paidBy.get(p.tenantId) ?? 0) + p.amount);

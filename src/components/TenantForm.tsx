@@ -143,6 +143,8 @@ export default function TenantForm({ initial }: { initial?: TenantInitial }) {
     phone: !phone.trim() && "Enter a phone number",
     rent: (rent.trim() === "" || Number.isNaN(rentValue) || rentValue < 0) && "Enter the monthly rent",
     condition: !condition.trim() && "Describe the condition at move-in",
+    // A member limited to certain properties can't leave a tenant unplaced — they'd lose sight of them.
+    property: workspace.restricted && !propertyId && "Choose one of your properties",
     unit: !!propertyId && !unitId && "Choose the unit they're renting",
     docs: docs.some((d) => !d.label.trim()) && "Give every document a label",
   };
@@ -381,16 +383,23 @@ export default function TenantForm({ initial }: { initial?: TenantInitial }) {
           </Field>
         </div>
         <div className="grid-2">
-          <Field label="Property" hint={properties?.length === 0 ? "Add a property first to assign this tenant." : undefined}>
+          <Field
+            label="Property"
+            required={workspace.restricted}
+            error={show(errors.property)}
+            hint={properties?.length === 0 ? "Add a property first to assign this tenant." : undefined}
+          >
             <select
-              className="input"
+              className={`input${show(errors.property) ? " invalid" : ""}`}
               value={propertyId}
               onChange={(e) => {
                 setPropertyId(e.target.value);
                 setUnitId("");
               }}
             >
-              <option value="">Not assigned</option>
+              <option value="" disabled={workspace.restricted}>
+                {workspace.restricted ? "Choose a property" : "Not assigned"}
+              </option>
               {properties?.map((p) => (
                 <option key={p._id} value={p._id}>
                   {p.name}

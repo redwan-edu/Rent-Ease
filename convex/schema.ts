@@ -21,6 +21,9 @@ export default defineSchema({
   users: defineTable({
     tokenIdentifier: v.string(),
     email: v.string(),
+    // From Clerk. Team access is granted by email, so an address Clerk
+    // reports as unverified never unlocks someone else's workspace.
+    emailVerified: v.optional(v.boolean()),
     name: v.string(),
     imageUrl: v.optional(v.string()),
     currency: v.optional(v.string()),
@@ -35,6 +38,11 @@ export default defineSchema({
     workspaceId: v.id("users"),
     email: v.string(),
     role: roleValidator,
+    // Limits the member to these properties and the tenants placed in them.
+    // Absent means every property; an empty list means none.
+    propertyIds: v.optional(v.array(v.id("properties"))),
+    // When the member first saw the "you've been added" welcome.
+    seenAt: v.optional(v.number()),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_email", ["email"])
@@ -101,6 +109,8 @@ export default defineSchema({
     amount: v.number(),
     paidOn: v.string(), // YYYY-MM-DD
     note: v.optional(v.string()),
+    // Who entered it — accountability when a team shares one workspace.
+    recordedBy: v.optional(v.id("users")),
   })
     .index("by_workspace_month", ["workspaceId", "month"])
     .index("by_tenant", ["tenantId"]),
@@ -150,6 +160,28 @@ export default defineSchema({
     // Every file kept alive for this archive; only a purge deletes them.
     storageIds: v.array(v.id("_storage")),
   }).index("by_workspace", ["workspaceId"]),
+
+  /**
+   * System announcements shown to every user in the notification panel. The
+   * admin manages this table straight from the Convex dashboard: add a row to
+   * broadcast a message, delete the row to withdraw it.
+   */
+  admin_message: defineTable({
+    title: v.string(),
+    body: v.string(),
+    // Optional: an https:// link or an in-app path like "/app".
+    link: v.optional(v.string()),
+  }),
+
+  /**
+   * Notifications each user has already seen or cleared, so they never show up
+   * for that person again. Per user — a teammate's reads don't affect yours.
+   */
+  notificationReads: defineTable({
+    userId: v.id("users"),
+    // "note:<noteId>:<remindAt>" or "admin:<messageId>"
+    key: v.string(),
+  }).index("by_user_key", ["userId", "key"]),
 
   pushSubscriptions: defineTable({
     userId: v.id("users"),

@@ -2,7 +2,21 @@
 
 import { useClerk, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
-import { Bell, BellOff, Check, LogOut, Mail, Trash2, UserCog, UserPlus, Users } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  Building2,
+  Check,
+  DoorOpen,
+  Link2,
+  LogOut,
+  Mail,
+  MailWarning,
+  Trash2,
+  UserCog,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -14,6 +28,8 @@ import { disablePush, hasSubscription, pushState } from "@/lib/push";
 import { roleLabel, useWorkspace } from "@/lib/workspace";
 
 type MemberRole = "full" | "edit" | "read";
+/** null = every property. */
+type Scope = Id<"properties">[] | null;
 
 const ROLES: { value: MemberRole; label: string; text: string }[] = [
   { value: "full", label: "Full access", text: "Add, edit and remove anything" },
@@ -22,6 +38,12 @@ const ROLES: { value: MemberRole; label: string; text: string }[] = [
 ];
 
 const CURRENCIES = ["$", "€", "£", "৳", "₹", "AED", "SAR", "¥"];
+
+function scopeLabel(scope: Scope) {
+  if (scope === null) return "All properties";
+  if (scope.length === 0) return "No properties";
+  return `${scope.length} ${scope.length === 1 ? "property" : "properties"}`;
+}
 
 export default function SettingsPage() {
   const { user } = useUser();
@@ -32,6 +54,7 @@ export default function SettingsPage() {
   const setCurrency = useMutation(api.users.setCurrency);
   const setRole = useMutation(api.members.setRole);
   const removeMember = useMutation(api.members.remove);
+  const leave = useMutation(api.members.leave);
   const unsubscribe = useMutation(api.pushData.unsubscribe);
   const me = useQuery(api.users.me);
   const setFontScale = useMutation(api.users.setFontScale);
@@ -40,11 +63,28 @@ export default function SettingsPage() {
 
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<{ id: Id<"members">; email: string } | null>(null);
+  const [scoping, setScoping] = useState<{ id: Id<"members">; email: string; scope: Scope } | null>(null);
+  const [leaving, setLeaving] = useState(false);
   const [pushOn, setPushOn] = useState(false);
 
   useEffect(() => {
     hasSubscription().then(setPushOn).catch(() => {});
   }, []);
+
+  const shareInvite = () =>
+    run(async () => {
+      const url = `${window.location.origin}/join?w=${workspace.workspaceId}`;
+      const text = `Join my Rent Ease workspace. Sign in with the email address I added you with.`;
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "Rent Ease invite", text, url });
+          return;
+        } catch {
+          // Share sheet dismissed — fall through to copying.
+        }
+      }
+      await navigator.clipboard.writeText(url);
+    }, "Invite link ready");
 
   return (
     <>
@@ -104,7 +144,10 @@ export default function SettingsPage() {
                   <span className="radio" />
                   <div style={{ flex: 1 }}>
                     <strong>{w.role === "owner" ? "My workspace" : `${w.name}'s workspace`}</strong>
-                    <span>{roleLabel[w.role]}</span>
+                    <span>
+                      {roleLabel[w.role]}
+                      {w.restricted && " · selected properties"}
+                    </span>
                   </div>
                 </button>
               ))}
@@ -174,13 +217,19 @@ export default function SettingsPage() {
             {isOwner && <button onClick={() => setAdding(true)}>Add person</button>}
           </div>
           {!isOwner ? (
-            <div className="hint">
-              <UserCog size={18} />
-              <div>
-                <strong>{roleLabel[workspace.role]}</strong>
-                You&apos;re a member of {workspace.name}&apos;s workspace. Only the owner can manage the team.
-                {!can("edit") && " You can view everything but can't make changes."}
+            <div className="stack">
+              <div className="hint">
+                <UserCog size={18} />
+                <div>
+                  <strong>{roleLabel[workspace.role]}</strong>
+                  You&apos;re a member of {workspace.name}&apos;s workspace. Only the owner can manage the team.
+                  {!can("edit") && " You can view everything but can't make changes."}
+                  {workspace.restricted && " You only see the properties the owner assigned to you."}
+                </div>
               </div>
+              <button className="btn btn-secondary btn-block" onClick={() => setLeaving(true)}>
+                <DoorOpen size={17} /> Leave this workspace
+              </button>
             </div>
           ) : members === undefined ? (
             <div className="card card-pad" style={{ display: "grid", placeItems: "center" }}>
@@ -195,31 +244,65 @@ export default function SettingsPage() {
               </div>
             </button>
           ) : (
-            <div className="card list">
-              {members.map((m) => (
-                <div className="row" key={m._id}>
-                  <Avatar name={m.name ?? m.email} size={40} />
-                  <div className="row-main">
-                    <div className="row-title">{m.name ?? m.email}</div>
-                    <div className="row-sub">{m.joined ? m.email : "Hasn't signed up yet"}</div>
+            <div className="stack">
+              <div className="card list">
+                {members.map((m) => (
+                  <div className="member" key={m._id}>
+                    <div className="row">
+                      <Avatar name={m.name ?? m.email} size={40} />
+                      <div className="row-main">
+                        <div className="row-title">{m.name ?? m.email}</div>
+                        <div className={`row-sub${!m.joined || m.unverified ? " warn-text" : ""}`}>
+                          {!m.joined
+                            ? `Waiting for them to sign up as ${m.email}`
+                            : m.unverified
+                              ? `${m.email} · email not verified, no access yet`
+                              : m.email}
+                        </div>
+                      </div>
+                      <button
+                        className="icon-btn sm plain"
+                        onClick={() => setRemoving({ id: m._id, email: m.email })}
+                        aria-label={`Remove ${m.email}`}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    <div className="member-controls">
+                      <select
+                        className="select-sm"
+                        value={m.role}
+                        aria-label={`Role for ${m.email}`}
+                        onChange={(e) => run(() => setRole({ memberId: m._id, role: e.target.value as MemberRole }), "Role updated")}
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r.value} value={r.value}>
+                            {r.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="chip"
+                        onClick={() => setScoping({ id: m._id, email: m.email, scope: m.propertyIds })}
+                      >
+                        <Building2 size={14} /> {scopeLabel(m.propertyIds)}
+                      </button>
+                      {!m.joined && (
+                        <button className="chip" onClick={shareInvite}>
+                          <Link2 size={14} /> Send link
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <select
-                    className="select-sm"
-                    value={m.role}
-                    aria-label={`Role for ${m.email}`}
-                    onChange={(e) => run(() => setRole({ memberId: m._id, role: e.target.value as MemberRole }), "Role updated")}
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r.value} value={r.value}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button className="icon-btn sm plain" onClick={() => setRemoving({ id: m._id, email: m.email })} aria-label="Remove">
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
+              <button className="btn btn-secondary btn-block" onClick={shareInvite}>
+                <Link2 size={17} /> Share invite link
+              </button>
+              <p className="hint-text">
+                The link opens your workspace for anyone you&apos;ve added — they must sign in with the exact
+                email address above. It does nothing for anyone else.
+              </p>
             </div>
           )}
         </section>
@@ -230,7 +313,8 @@ export default function SettingsPage() {
         <p className="footer-note">Rent Ease · v1.0</p>
       </div>
 
-      {adding && <AddMemberSheet workspaceId={workspace.workspaceId} onClose={() => setAdding(false)} />}
+      {adding && <AddMemberSheet workspaceId={workspace.workspaceId} onClose={() => setAdding(false)} onShare={shareInvite} />}
+      {scoping && <ScopeSheet member={scoping} onClose={() => setScoping(null)} />}
       {removing && (
         <ConfirmSheet
           title="Remove from team?"
@@ -240,15 +324,160 @@ export default function SettingsPage() {
           onConfirm={() => removeMember({ memberId: removing.id })}
         />
       )}
+      {leaving && (
+        <ConfirmSheet
+          title={`Leave ${workspace.name}'s workspace?`}
+          text="You'll lose access straight away. The owner would have to add you again to bring you back."
+          confirmLabel="Leave"
+          onClose={() => setLeaving(false)}
+          onConfirm={async () => {
+            await leave({ workspaceId: workspace.workspaceId });
+            switchTo(workspaces[0].workspaceId);
+          }}
+        />
+      )}
     </>
   );
 }
 
-function AddMemberSheet({ workspaceId, onClose }: { workspaceId: Id<"users">; onClose: () => void }) {
+/** Choose between every property and a hand-picked list. */
+function ScopePicker({ value, onChange }: { value: Scope; onChange: (next: Scope) => void }) {
+  const { workspace } = useWorkspace();
+  const properties = useQuery(api.properties.list, { workspaceId: workspace.workspaceId });
+  const picked = new Set<string>(value ?? []);
+
+  return (
+    <div className="field">
+      <span className="label">Properties they can see</span>
+      <div className="role-pick">
+        <button className={value === null ? "on" : ""} onClick={() => onChange(null)}>
+          <span className="radio" />
+          <div style={{ flex: 1 }}>
+            <strong>All properties</strong>
+            <span>Including any you add later</span>
+          </div>
+          {value === null && <Check size={16} />}
+        </button>
+        <button className={value !== null ? "on" : ""} onClick={() => value === null && onChange([])}>
+          <span className="radio" />
+          <div style={{ flex: 1 }}>
+            <strong>Only selected properties</strong>
+            <span>They see those properties, their tenants and payments — nothing else</span>
+          </div>
+          {value !== null && <Check size={16} />}
+        </button>
+      </div>
+      {value !== null &&
+        (properties === undefined ? (
+          <Spinner />
+        ) : properties.length === 0 ? (
+          <p className="hint-text">You haven&apos;t added any properties yet.</p>
+        ) : (
+          <div className="chips">
+            {properties.map((p) => (
+              <button
+                key={p._id}
+                type="button"
+                className={`chip${picked.has(p._id) ? " on" : ""}`}
+                aria-pressed={picked.has(p._id)}
+                onClick={() =>
+                  onChange(picked.has(p._id) ? value.filter((id) => id !== p._id) : [...value, p._id])
+                }
+              >
+                {picked.has(p._id) && <Check size={13} />} {p.name}
+              </button>
+            ))}
+          </div>
+        ))}
+    </div>
+  );
+}
+
+function ScopeSheet({
+  member,
+  onClose,
+}: {
+  member: { id: Id<"members">; email: string; scope: Scope };
+  onClose: () => void;
+}) {
+  const setScope = useMutation(api.members.setScope);
+  const { run, busy } = useRun();
+  const [scope, setScopeValue] = useState<Scope>(member.scope);
+
+  return (
+    <Sheet
+      title="Property access"
+      onClose={onClose}
+      footer={
+        <button
+          className="btn btn-primary"
+          disabled={busy}
+          onClick={() =>
+            run(async () => {
+              await setScope({ memberId: member.id, propertyIds: scope });
+              onClose();
+            }, "Access updated")
+          }
+        >
+          {busy ? <Spinner /> : "Save"}
+        </button>
+      }
+    >
+      <p className="muted" style={{ margin: 0 }}>{member.email}</p>
+      <ScopePicker value={scope} onChange={setScopeValue} />
+      {scope !== null && scope.length === 0 && (
+        <div className="hint">
+          <MailWarning size={18} />
+          <div>With no properties selected they&apos;ll see an empty workspace.</div>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+function AddMemberSheet({
+  workspaceId,
+  onClose,
+  onShare,
+}: {
+  workspaceId: Id<"users">;
+  onClose: () => void;
+  onShare: () => void;
+}) {
   const add = useMutation(api.members.add);
   const { run, busy } = useRun();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<MemberRole>("edit");
+  const [scope, setScope] = useState<Scope>(null);
+  const [added, setAdded] = useState<string | null>(null);
+
+  if (added) {
+    return (
+      <Sheet
+        title="Added to team"
+        onClose={onClose}
+        footer={
+          <>
+            <button className="btn btn-secondary" onClick={onClose}>
+              Done
+            </button>
+            <button className="btn btn-primary" onClick={onShare}>
+              <Link2 size={17} /> Share link
+            </button>
+          </>
+        }
+      >
+        <div className="hint">
+          <UserPlus size={18} />
+          <div>
+            <strong>Now send them the invite link</strong>
+            Rent Ease doesn&apos;t email anyone. Share the link over WhatsApp or SMS — they sign in with{" "}
+            <strong>{added}</strong> and your workspace opens for them.
+          </div>
+        </div>
+      </Sheet>
+    );
+  }
 
   return (
     <Sheet
@@ -260,8 +489,8 @@ function AddMemberSheet({ workspaceId, onClose }: { workspaceId: Id<"users">; on
           disabled={!email.includes("@") || busy}
           onClick={() =>
             run(async () => {
-              await add({ workspaceId, email, role });
-              onClose();
+              await add({ workspaceId, email, role, propertyIds: scope ?? undefined });
+              setAdded(email.trim().toLowerCase());
             }, "Added to your team")
           }
         >
@@ -269,7 +498,7 @@ function AddMemberSheet({ workspaceId, onClose }: { workspaceId: Id<"users">; on
         </button>
       }
     >
-      <Field label="Email address" hint="They sign in to Rent Ease with this email to get access.">
+      <Field label="Email address" hint="They must sign in to Rent Ease with exactly this email to get access.">
         <div className="input-wrap">
           <Mail size={17} color="var(--ink-3)" />
           <input
@@ -298,6 +527,7 @@ function AddMemberSheet({ workspaceId, onClose }: { workspaceId: Id<"users">; on
           ))}
         </div>
       </div>
+      <ScopePicker value={scope} onChange={setScope} />
       <div className="hint">
         <UserPlus size={18} />
         <div>Only you, the owner, can manage the team and currency.</div>

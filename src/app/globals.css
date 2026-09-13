@@ -320,7 +320,9 @@ img {
   transition:
     transform 0.12s,
     opacity 0.15s,
-    background 0.15s;
+    color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .btn:active {
@@ -666,8 +668,13 @@ button.chip:active {
   display: inline-grid;
   place-items: center;
   flex-shrink: 0;
-  background: var(--ink);
-  color: #fff;
+}
+
+.logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
 }
 
 /* ─── Dashboard ─── */
@@ -2870,21 +2877,6 @@ input[type="datetime-local"].input {
   margin-top: 1px;
 }
 
-/* A press-and-hold confirm deserves a bigger target than a normal button. */
-.sheet-foot .hold-btn {
-  height: 56px;
-  padding: 0 24px;
-  border-radius: 17px;
-  font-size: calc(15.5px * var(--fs));
-}
-
-.sheet-foot:has(.hold) {
-  padding: 16px 20px 20px;
-}
-
-.hold {
-  gap: 12px;
-}
 
 /* ─── Archive ─── */
 
@@ -2955,4 +2947,192 @@ input[type="datetime-local"].input {
   font-size: calc(12.5px * var(--fs));
   line-height: 1.5;
   color: var(--ink-2);
+}
+
+/* ─── Invite link ─── */
+
+.join {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+
+.join-center {
+  align-items: center;
+  padding: 24px 0;
+  color: var(--ink-2);
+}
+
+.join h2 {
+  margin: 4px 0 0;
+  font-size: calc(20px * var(--fs));
+  letter-spacing: -0.01em;
+}
+
+.join p {
+  margin: 0 0 8px;
+  font-size: calc(14px * var(--fs));
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.join-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.join-icon.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+/* ─── Team members ─── */
+
+.member + .member {
+  border-top: 1px solid var(--line);
+}
+
+.member .row {
+  border-top: 0;
+}
+
+.member-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px 14px 68px;
+}
+
+.member-controls .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.warn-text {
+  color: var(--warn);
+}
+
+/* ─── Hold-to-confirm button (everywhere it's used) ─── */
+
+/* .hold is a column flexbox: the generic ".sheet-foot .btn { flex: 1 }" gave the
+   button a zero flex-basis vertically and squashed it to its text height. */
+.hold .hold-btn,
+.sheet-foot .hold .btn {
+  flex: none;
+  height: 60px;
+  padding: 0 24px;
+  border-radius: 18px;
+}
+
+.sheet-foot:has(.hold) {
+  padding: 16px 20px calc(18px + var(--safe-b));
+}
+
+.hold {
+  gap: 12px;
+}
+
+/* ─── Danger zone buttons ─── */
+
+/* Moving out is reversible: a calm outline that warms to amber on hover. */
+.btn-caution {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+/* Deleting is the serious one: solid red. */
+.btn-destructive {
+  background: var(--danger);
+  color: #fff;
+}
+
+.danger-zone .dz-part + .dz-part {
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.dz-part {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ─── Hover fades (pointer devices only, so taps never stick) ─── */
+
+@media (hover: hover) {
+  .btn-primary:hover {
+    background: #2e2e2c;
+  }
+
+  .btn-accent:hover {
+    background: var(--accent-ink);
+  }
+
+  .btn-secondary:hover {
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px var(--ink-3);
+  }
+
+  .btn-ghost:hover {
+    background: var(--sunken);
+    color: var(--ink);
+  }
+
+  .btn-danger:hover {
+    background: #f6d3cd;
+  }
+
+  .btn-caution:hover {
+    background: var(--warn-soft);
+    color: var(--warn);
+    box-shadow: inset 0 0 0 1px #e8c98f;
+  }
+
+  .btn-destructive:hover {
+    background: #a53125;
+    box-shadow: 0 6px 18px -8px rgba(192, 57, 43, 0.55);
+  }
+
+  .hold-btn:not(:disabled):not(.holding):not(.done):hover {
+    background: #2e2e2c;
+  }
+}
+
+/* ─── Notification panel ─── */
+
+.notif {
+  align-items: flex-start;
+}
+
+.notif .row-icon {
+  margin-top: 2px;
+}
+
+.notif-body {
+  white-space: pre-line;
+  line-height: 1.5;
+}
+
+.notif-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: calc(13px * var(--fs));
 }

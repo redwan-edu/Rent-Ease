@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth, useClerk } from "@clerk/nextjs";
+import { useAuth, useClerk, useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -22,7 +22,11 @@ export function useBootstrap() {
   const [stored, setStored] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [slow, setSlow] = useState(false);
-  const workspaces = useQuery(api.workspaces.list, stored ? {} : "skip");
+  const { user } = useUser();
+  // Every account has to prove it owns its email before it can use the app.
+  const unverified =
+    !!user?.primaryEmailAddress && user.primaryEmailAddress.verification?.status !== "verified";
+  const workspaces = useQuery(api.workspaces.list, stored && !unverified ? {} : "skip");
 
   useEffect(() => {
     if (clerkLoaded && !isSignedIn) router.replace("/sign-in");
@@ -52,7 +56,7 @@ export function useBootstrap() {
       ? "We couldn't connect your account. Please sign in again."
       : null);
 
-  return { workspaces, error: failed };
+  return { workspaces, error: failed, unverified };
 }
 
 export function BootError({ message }: { message: string }) {

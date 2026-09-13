@@ -114,7 +114,9 @@ export default function TenantsPage() {
                   </div>
                   <div className="row-end">
                     <span className="row-amount">{money(t.rent)}</span>
+                    {/* Status is only about the running month, and only if they rent in it. */}
                     {status === "active" &&
+                      t.owes &&
                       (state === "paid" ? (
                         <span className="badge ok">Paid</span>
                       ) : state === "partial" ? (

@@ -156,7 +156,7 @@ export default function PropertyPage() {
                         </div>
                       </div>
                     </Link>
-                    {can("edit") && (
+                    {can("edit") && !workspace.restricted && (
                       <button
                         className="icon-btn sm plain"
                         aria-label={`Unassign ${u.occupant.name}`}

@@ -33,6 +33,35 @@ type WorkspaceContextValue = {
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
+const LAST_KEY = "rent-ease:last-workspace";
+
+/** Remembers the workspace this device last opened, so the app reopens there. */
+export function rememberWorkspace(id: string) {
+  try {
+    localStorage.setItem(LAST_KEY, id);
+  } catch {
+    // Storage unavailable (private mode) — landing just falls back.
+  }
+}
+
+/**
+ * Where to land after sign-in: the workspace last opened on this device;
+ * otherwise a shared workspace when your own has nothing in it yet — so a new
+ * team member opens the workspace they were invited to, not an empty one.
+ */
+export function landingWorkspace(workspaces: WorkspaceInfo[]) {
+  let last: string | null = null;
+  try {
+    last = localStorage.getItem(LAST_KEY);
+  } catch {
+    last = null;
+  }
+  const remembered = workspaces.find((w) => w.workspaceId === last);
+  if (remembered) return remembered;
+  const [own, ...shared] = workspaces;
+  return own.empty && shared.length > 0 ? shared[0] : own;
+}
+
 /** The workspace comes from the URL (/[userId]/…); the layout guarantees it's one of `workspaces`. */
 export function WorkspaceProvider({
   workspaces,

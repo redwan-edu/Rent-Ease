@@ -4,7 +4,11 @@ import { mutation, query, type QueryCtx } from "./_generated/server";
 import {
   access,
   allTenants,
+  assertTenant,
   clean,
+  seesProperty,
+  seesTenant,
+  type Access,
   inRentWindow,
   monthOf,
   monthRange,
@@ -14,6 +18,32 @@ import {
   tryAccess,
 } from "./lib";
 
+/**
+ * The slice of a workspace this caller may see: every tenant, property and
+ * unit for most people, only their assigned properties for restricted members.
+ */
+async function visibleBooks(ctx: QueryCtx, a: Access, workspaceId: Id<"users">) {
+  const tenants = await allTenants(ctx, workspaceId);
+  const properties = await ctx.db
+    .query("properties")
+    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+    .collect();
+  const units = await ctx.db
+    .query("units")
+    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+    .collect();
+  if (a.scope === null) return { ...tenants, properties, units };
+  const active = tenants.active.filter((t) => seesTenant(a, t));
+  const former = tenants.former.filter((t) => seesTenant(a, t));
+  return {
+    active,
+    former,
+    all: [...active, ...former],
+    properties: properties.filter((p) => seesProperty(a, p._id)),
+    units: units.filter((u) => seesProperty(a, u.propertyId)),
+  };
+}
+
 /** Dashboard numbers for one month: what's collected and what's left. */
 export const summary = query({
   args: { workspaceId: v.id("users"), month: v.string() },
@@ -22,17 +52,16 @@ export const summary = query({
     if (!a) return null;
 
     const startMonth = await startMonthOf(ctx, workspaceId);
-    const { active, all } = await allTenants(ctx, workspaceId);
+    const { active, all, properties, units } = await visibleBooks(ctx, a, workspaceId);
     // Only tenants actually renting in this month owe anything for it.
     const tenants = all.filter((t) => inRentWindow(t, startMonth, month));
-    const payments = await ctx.db
-      .query("payments")
-      .withIndex("by_workspace_month", (q) => q.eq("workspaceId", workspaceId).eq("month", month))
-      .collect();
-    const properties = await ctx.db
-      .query("properties")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .collect();
+    const visibleIds = new Set<string>(all.map((t) => t._id));
+    const payments = (
+      await ctx.db
+        .query("payments")
+        .withIndex("by_workspace_month", (q) => q.eq("workspaceId", workspaceId).eq("month", month))
+        .collect()
+    ).filter((p) => a.scope === null || visibleIds.has(p.tenantId));
 
     const paidBy = new Map<string, number>();
     for (const p of payments) paidBy.set(p.tenantId, (paidBy.get(p.tenantId) ?? 0) + p.amount);
@@ -41,10 +70,6 @@ export const summary = query({
     const expected = tenants.reduce((s, t) => s + t.rent, 0);
     let left = 0;
     let paidCount = 0;
-    const units = await ctx.db
-      .query("units")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .collect();
     const unitName = new Map(units.map((u) => [u._id as string, u.name]));
     const occupiedUnits = new Set(active.map((t) => t.unitId).filter((id) => id && unitName.has(id)));
 
@@ -129,15 +154,7 @@ export const arrears = query({
     const currentMonth = clientMonth < serverMonth ? clientMonth : serverMonth;
     const lastPast = shiftMonth(currentMonth, -1);
 
-    const { all } = await allTenants(ctx, workspaceId);
-    const properties = await ctx.db
-      .query("properties")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .collect();
-    const units = await ctx.db
-      .query("units")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .collect();
+    const { all, properties, units } = await visibleBooks(ctx, a, workspaceId);
     const unitName = new Map(units.map((u) => [u._id as string, u.name]));
     const propertyName = new Map(properties.map((p) => [p._id as string, p.name]));
     const placeOf = (propertyId?: string, unitId?: string) => {
@@ -213,7 +230,7 @@ export const monthStatus = query({
     const t = await ctx.db.get(tenantId);
     if (!t) return null;
     const a = await tryAccess(ctx, t.workspaceId);
-    if (!a) return null;
+    if (!a || !seesTenant(a, t)) return null;
     const startMonth = await startMonthOf(ctx, t.workspaceId);
     const paid = await paidFor(ctx, tenantId, month);
     return {
@@ -279,7 +296,8 @@ export const add = mutation({
   handler: async (ctx, { tenantId, amount, month, paidOn, note }) => {
     const t = await ctx.db.get(tenantId);
     if (!t) throw new ConvexError("Tenant not found.");
-    await access(ctx, t.workspaceId, "edit");
+    const a = await access(ctx, t.workspaceId, "edit");
+    assertTenant(a, t);
     if (!Number.isFinite(amount) || amount <= 0) throw new ConvexError("Enter an amount above zero.");
 
     const owner = await ctx.db.get(t.workspaceId);
@@ -311,6 +329,7 @@ export const add = mutation({
       month,
       paidOn,
       note: clean(note),
+      recordedBy: a.me._id,
     });
   },
 });
@@ -320,7 +339,9 @@ export const remove = mutation({
   handler: async (ctx, { paymentId }) => {
     const p = await ctx.db.get(paymentId);
     if (!p) return;
-    await access(ctx, p.workspaceId, "full");
+    const a = await access(ctx, p.workspaceId, "full");
+    const t = await ctx.db.get(p.tenantId);
+    if (t) assertTenant(a, t);
     await ctx.db.delete(paymentId);
   },
 });

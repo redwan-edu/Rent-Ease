@@ -14,8 +14,8 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(data.title || "Rent Ease", {
       body: data.body || "",
       tag: data.tag,
-      icon: "/icon-192",
-      badge: "/icon-192",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
       data: { url: data.url || "/" },
     }),
   );

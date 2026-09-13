@@ -1,7 +1,18 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { propertyKind } from "./schema";
-import { access, checkPlacement, clean, tryAccess, unitOccupant } from "./lib";
+import {
+  access,
+  assertPlacement,
+  assertProperty,
+  assertTenant,
+  assertUnrestricted,
+  checkPlacement,
+  clean,
+  seesProperty,
+  tryAccess,
+  unitOccupant,
+} from "./lib";
 
 const MAX_UNITS = 200;
 
@@ -36,11 +47,13 @@ export const list = query({
   handler: async (ctx, { workspaceId }) => {
     const a = await tryAccess(ctx, workspaceId);
     if (!a) return [];
-    const properties = await ctx.db
-      .query("properties")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .order("desc")
-      .collect();
+    const properties = (
+      await ctx.db
+        .query("properties")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .order("desc")
+        .collect()
+    ).filter((p) => seesProperty(a, p._id));
     return Promise.all(
       properties.map(async (p) => {
         const units = await ctx.db
@@ -72,7 +85,7 @@ export const get = query({
     const p = await ctx.db.get(propertyId);
     if (!p) return null;
     const a = await tryAccess(ctx, p.workspaceId);
-    if (!a) return null;
+    if (!a || !seesProperty(a, propertyId)) return null;
     const tenants = await ctx.db
       .query("tenants")
       .withIndex("by_property", (q) => q.eq("propertyId", propertyId))
@@ -116,7 +129,9 @@ export const unitsFor = query({
   args: { propertyId: v.id("properties") },
   handler: async (ctx, { propertyId }) => {
     const p = await ctx.db.get(propertyId);
-    if (!p || !(await tryAccess(ctx, p.workspaceId))) return [];
+    if (!p) return [];
+    const a = await tryAccess(ctx, p.workspaceId);
+    if (!a || !seesProperty(a, propertyId)) return [];
     const units = await ctx.db
       .query("units")
       .withIndex("by_property", (q) => q.eq("propertyId", propertyId))
@@ -133,7 +148,8 @@ export const unitsFor = query({
 export const create = mutation({
   args: { workspaceId: v.id("users"), ...fields, units: v.array(v.string()) },
   handler: async (ctx, { workspaceId, kind, units, ...f }) => {
-    await access(ctx, workspaceId, "edit");
+    // A restricted member couldn't see a property they created.
+    assertUnrestricted(await access(ctx, workspaceId, "edit"));
     const names = units.map((n) => n.trim());
     checkUnitNames(names);
     const propertyId = await ctx.db.insert("properties", { workspaceId, kind, ...normalize(f) });
@@ -151,7 +167,7 @@ export const update = mutation({
   handler: async (ctx, { propertyId, kind, units, ...f }) => {
     const p = await ctx.db.get(propertyId);
     if (!p) throw new ConvexError("Property not found.");
-    await access(ctx, p.workspaceId, "edit");
+    assertProperty(await access(ctx, p.workspaceId, "edit"), propertyId);
     const cleaned = units.map((u) => ({ ...u, name: u.name.trim() }));
     checkUnitNames(cleaned.map((u) => u.name));
 
@@ -195,7 +211,7 @@ export const remove = mutation({
   handler: async (ctx, { propertyId }) => {
     const p = await ctx.db.get(propertyId);
     if (!p) return;
-    await access(ctx, p.workspaceId, "full");
+    assertProperty(await access(ctx, p.workspaceId, "full"), propertyId);
     const tenants = await ctx.db
       .query("tenants")
       .withIndex("by_property", (q) => q.eq("propertyId", propertyId))
@@ -211,6 +227,16 @@ export const remove = mutation({
       .withIndex("by_property", (q) => q.eq("propertyId", propertyId))
       .collect();
     for (const n of notes) await ctx.db.patch(n._id, { propertyId: undefined });
+    // Drop it from restricted members' lists; never widen anyone's access.
+    const members = await ctx.db
+      .query("members")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", p.workspaceId))
+      .collect();
+    for (const m of members) {
+      if (m.propertyIds?.includes(propertyId)) {
+        await ctx.db.patch(m._id, { propertyIds: m.propertyIds.filter((id) => id !== propertyId) });
+      }
+    }
     await ctx.db.delete(propertyId);
   },
 });
@@ -225,7 +251,9 @@ export const assign = mutation({
   handler: async (ctx, { tenantId, propertyId, unitId }) => {
     const t = await ctx.db.get(tenantId);
     if (!t) throw new ConvexError("Tenant not found.");
-    await access(ctx, t.workspaceId, "edit");
+    const a = await access(ctx, t.workspaceId, "edit");
+    assertTenant(a, t);
+    assertPlacement(a, propertyId);
     await checkPlacement(ctx, t.workspaceId, propertyId, unitId, tenantId);
     await ctx.db.patch(tenantId, { propertyId, unitId });
   },
