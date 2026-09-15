@@ -11,7 +11,7 @@ import { dateLabel, monthKey } from "@/lib/format";
 import { useWorkspace } from "@/lib/workspace";
 
 export default function TenantsPage() {
-  const { workspace, can, money, to } = useWorkspace();
+  const { workspace, can, to } = useWorkspace();
   const [status, setStatus] = useState<"active" | "former">("active");
   const [search, setSearch] = useState("");
   const tenants = useQuery(api.tenants.list, {
@@ -35,16 +35,16 @@ export default function TenantsPage() {
         title="Tenants"
         actions={
           can("edit") && (
-            <Link href={to("/tenants/new")} className="icon-btn dark" aria-label="Add tenant">
-              <Plus size={20} />
+            <Link href={to("/tenants/new")} className="btn btn-sm btn-primary">
+              <Plus size={16} /> Add
             </Link>
           )
         }
       />
       <div className="page">
-        <div style={{ display: "grid", gap: 12 }}>
+        <div className="toolbar">
           <div className="input-wrap">
-            <Search size={17} color="var(--ink-3)" />
+            <Search size={17} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -57,7 +57,7 @@ export default function TenantsPage() {
             onChange={setStatus}
             options={[
               { value: "active", label: "Current" },
-              { value: "former", label: "Former" },
+              { value: "former", label: "Moved out" },
             ]}
           />
         </div>
@@ -67,12 +67,12 @@ export default function TenantsPage() {
         ) : filtered.length === 0 ? (
           <div className="card">
             {q ? (
-              <Empty icon={<Search size={22} />} title="No matches" text="Try a different name or number." />
+              <Empty icon={<Search size={24} />} title="No matches" text="Try a different name or number." />
             ) : status === "active" ? (
               <Empty
-                icon={<Users size={22} />}
+                icon={<Users size={24} />}
                 title="No tenants yet"
-                text="Add a tenant with their details, rent and documents."
+                text="Add a tenant with their phone number, rent and documents."
                 action={
                   can("edit") && (
                     <Link href={to("/tenants/new")} className="btn btn-primary btn-sm">
@@ -83,8 +83,8 @@ export default function TenantsPage() {
               />
             ) : (
               <Empty
-                icon={<UserRound size={22} />}
-                title="No former tenants"
+                icon={<UserRound size={24} />}
+                title="No one has moved out"
                 text="When a tenant moves out, their full history is kept here."
               />
             )}
@@ -92,8 +92,7 @@ export default function TenantsPage() {
         ) : (
           <div className="card list">
             {filtered.map((t) => {
-              const state =
-                t.paid >= t.rent ? "paid" : t.paid > 0 ? "partial" : "due";
+              const state = t.paid >= t.rent ? "paid" : t.paid > 0 ? "partial" : "due";
               return (
                 <Link href={to(`/tenants/${t._id}`)} className="row" key={t._id}>
                   <Avatar name={t.name} url={t.photoUrl} />
@@ -101,30 +100,26 @@ export default function TenantsPage() {
                     <div className="row-title">{t.name}</div>
                     <div className="row-sub">
                       {status === "former"
-                        ? `Moved out ${dateLabel(t.moveOutDate)}`
-                        : [
-                            t.propertyName
-                              ? t.unitName
-                                ? `${t.propertyName} · ${t.unitName}`
-                                : t.propertyName
-                              : "No property",
-                            t.phone,
-                          ].join(" · ")}
+                        ? t.moveOutDate
+                          ? `Moved out ${dateLabel(t.moveOutDate)}`
+                          : "Moved out"
+                        : t.propertyName
+                          ? t.unitName
+                            ? `${t.propertyName} · ${t.unitName}`
+                            : t.propertyName
+                          : "No property"}
                     </div>
                   </div>
-                  <div className="row-end">
-                    <span className="row-amount">{money(t.rent)}</span>
-                    {/* Status is only about the running month, and only if they rent in it. */}
-                    {status === "active" &&
-                      t.owes &&
-                      (state === "paid" ? (
-                        <span className="badge ok">Paid</span>
-                      ) : state === "partial" ? (
-                        <span className="badge warn">Partial</span>
-                      ) : (
-                        <span className="badge">Due</span>
-                      ))}
-                  </div>
+                  {/* Status is only about the running month, and only if they rent in it. */}
+                  {status === "active" &&
+                    t.owes &&
+                    (state === "paid" ? (
+                      <span className="badge ok">Paid</span>
+                    ) : state === "partial" ? (
+                      <span className="badge warn">Partly paid</span>
+                    ) : (
+                      <span className="badge danger">Due</span>
+                    ))}
                 </Link>
               );
             })}

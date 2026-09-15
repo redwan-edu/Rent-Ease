@@ -1,14 +1,13 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { Building2, MapPin, Plus } from "lucide-react";
+import { Building2, ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@convex/_generated/api";
 import Header from "@/components/Header";
 import PropertySheet from "@/components/PropertySheet";
-import { kindOf } from "@/components/kinds";
-import { Empty } from "@/components/ui";
+import { Empty, SkeletonList } from "@/components/ui";
 import { useWorkspace } from "@/lib/workspace";
 
 export default function PropertiesPage() {
@@ -16,7 +15,7 @@ export default function PropertiesPage() {
   // Members limited to certain properties can't add new ones.
   const canAdd = can("edit") && !workspace.restricted;
   const properties = useQuery(api.properties.list, { workspaceId: workspace.workspaceId });
-  // "/properties?new=1" (from the dashboard) opens the add sheet straight away.
+  // "/properties?new=1" (from the setup guide) opens the add sheet straight away.
   const [adding, setAdding] = useState(
     () => new URLSearchParams(window.location.search).has("new") && canAdd,
   );
@@ -31,25 +30,21 @@ export default function PropertiesPage() {
         title="Properties"
         actions={
           canAdd && (
-            <button className="icon-btn dark" onClick={() => setAdding(true)} aria-label="Add property">
-              <Plus size={20} />
+            <button className="btn btn-sm btn-primary" onClick={() => setAdding(true)}>
+              <Plus size={16} /> Add
             </button>
           )
         }
       />
       <div className="page">
         {!properties ? (
-          <div className="prop-grid">
-            {[0, 1].map((i) => (
-              <div key={i} className="skeleton" style={{ height: 150, borderRadius: 22 }} />
-            ))}
-          </div>
+          <SkeletonList rows={2} />
         ) : properties.length === 0 ? (
           <div className="card">
             <Empty
-              icon={<Building2 size={22} />}
+              icon={<Building2 size={24} />}
               title="No properties yet"
-              text="Add your villas, houses or apartments, then assign tenants to them."
+              text="Add the buildings or homes you rent out, with their units."
               action={
                 canAdd && (
                   <button className="btn btn-primary btn-sm" onClick={() => setAdding(true)}>
@@ -60,46 +55,24 @@ export default function PropertiesPage() {
             />
           </div>
         ) : (
-          <div className="prop-grid">
-            {properties.map((p) => {
-              const { Icon, label } = kindOf(p.kind);
-              return (
-                <Link href={to(`/properties/${p._id}`)} className="prop-card" key={p._id}>
-                  <div className="prop-card-top">
-                    <span className="kind-tile">
-                      <Icon size={22} />
-                    </span>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <h3>{p.name}</h3>
-                      <div className="row-sub" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        {p.address ? (
-                          <>
-                            <MapPin size={12} /> {p.address}
-                          </>
-                        ) : (
-                          label
-                        )}
-                      </div>
-                    </div>
-                    <span className="badge">{label}</span>
+          <div className="card list">
+            {properties.map((p) => (
+              <Link href={to(`/properties/${p._id}`)} className="row" key={p._id}>
+                <div className="row-main">
+                  <div className="row-title">{p.name}</div>
+                  <div className="row-sub">
+                    {p.unitCount === 0
+                      ? "No units yet"
+                      : `${p.occupiedCount} of ${p.unitCount} ${p.unitCount === 1 ? "unit" : "units"} rented`}
                   </div>
-                  <div className="prop-card-foot">
-                    <span>
-                      {p.unitCount === 0
-                        ? "No units yet"
-                        : `${p.occupiedCount} of ${p.unitCount} unit${p.unitCount === 1 ? "" : "s"} rented`}
-                    </span>
-                    <strong className="num" style={{ color: "var(--ink)" }}>
-                      {money(p.monthlyRent)}
-                      <span className="muted" style={{ fontWeight: 500 }}>
-                        {" "}
-                        / mo
-                      </span>
-                    </strong>
-                  </div>
-                </Link>
-              );
-            })}
+                </div>
+                <div className="row-end">
+                  <span className="row-amount">{money(p.monthlyRent)}</span>
+                  <span className="row-sub">a month</span>
+                </div>
+                <ChevronRight size={18} className="chev" />
+              </Link>
+            ))}
           </div>
         )}
       </div>

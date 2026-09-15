@@ -58,7 +58,7 @@ export default function WelcomeSheet({ invite }: { invite: WorkspaceInfo }) {
           {invite.restricted && " You'll only see the properties they assigned to you."}
         </p>
         <p className="hint-text" style={{ margin: 0 }}>
-          Switch between workspaces any time from the menu.
+          Switch between workspaces any time from More.
         </p>
       </div>
     </Sheet>

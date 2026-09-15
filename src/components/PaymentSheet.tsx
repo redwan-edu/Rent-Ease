@@ -26,7 +26,7 @@ export default function PaymentSheet({ target, onClose }: { target: PayTarget; o
   const [note, setNote] = useState("");
 
   // What's already on the books for this tenant in the chosen month, so the
-  // same rent can't be recorded twice — whatever month is picked.
+  // same rent can't be recorded twice, whatever month is picked.
   const status = useQuery(api.payments.monthStatus, { tenantId: target.tenantId, month });
 
   const value = parseAmount(amount);
@@ -53,11 +53,11 @@ export default function PaymentSheet({ target, onClose }: { target: PayTarget; o
 
   return (
     <Sheet
-      title={`Payment · ${target.name}`}
+      title={`Payment from ${target.name}`}
       onClose={onClose}
       footer={
         <HoldButton
-          label={valid ? `Hold to record ${money(value)}` : "Hold to record payment"}
+          label={valid ? `Record ${money(value)}` : "Record payment"}
           doneLabel="Payment recorded"
           disabled={!valid}
           onComplete={save}
@@ -69,10 +69,10 @@ export default function PaymentSheet({ target, onClose }: { target: PayTarget; o
           {status.remaining === 0 ? <CircleCheck size={17} /> : <CircleAlert size={17} />}
           <span>
             {status.remaining === 0
-              ? `${monthLabel(month)} is fully paid — ${money(status.paid)} of ${money(status.rent)}.`
+              ? `${monthLabel(month)} is paid in full (${money(status.paid)}).`
               : status.paid > 0
-                ? `${money(status.paid)} of ${money(status.rent)} already recorded for ${monthLabel(month)} · ${money(status.remaining)} left.`
-                : `Nothing recorded yet for ${monthLabel(month)} · rent is ${money(status.rent)}.`}
+                ? `${money(status.paid)} of ${money(status.rent)} already paid for ${monthLabel(month)}. ${money(status.remaining)} left.`
+                : `Nothing paid yet for ${monthLabel(month)}. Rent is ${money(status.rent)}.`}
           </span>
         </div>
       )}
@@ -92,7 +92,7 @@ export default function PaymentSheet({ target, onClose }: { target: PayTarget; o
       {status && !status.blocked && status.remaining > 0 && value !== status.remaining && (
         <div className="chips">
           <button type="button" className="chip" onClick={() => setAmount(String(status.remaining))}>
-            Pay the full {money(status.remaining)}
+            Use full amount: {money(status.remaining)}
           </button>
         </div>
       )}

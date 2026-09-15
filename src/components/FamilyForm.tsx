@@ -203,7 +203,7 @@ export default function FamilyForm({
             )}
           </div>
         )}
-        <span className="hint-text">Picture is optional</span>
+        <span className="hint-text">Photo is optional</span>
       </div>
 
       <section className="form-section">
@@ -245,7 +245,7 @@ export default function FamilyForm({
             className="input"
             value={job}
             onChange={(e) => setJob(e.target.value)}
-            placeholder="Optional — e.g. Teacher, Student"
+            placeholder="e.g. Teacher (optional)"
             disabled={!editable}
           />
         </Field>

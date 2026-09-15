@@ -44,6 +44,78 @@ async function visibleBooks(ctx: QueryCtx, a: Access, workspaceId: Id<"users">) 
   };
 }
 
+export type PaymentHistoryRow = {
+  _id: Id<"payments">;
+  tenantId: Id<"tenants">;
+  tenantName: string;
+  tenantPhotoUrl: string | null;
+  tenantStatus: "active" | "former";
+  placeName: string | null;
+  amount: number;
+  month: string;
+  paidOn: string;
+  note: string | null;
+  recordedByName: string | null;
+};
+
+/**
+ * Every payment this caller may see, across every tenant, newest first — the
+ * full transaction ledger behind Settings > Payments. Search, filter and sort
+ * happen on the client; this just hands over everything once.
+ */
+export const list = query({
+  args: { workspaceId: v.id("users") },
+  handler: async (ctx, { workspaceId }): Promise<PaymentHistoryRow[] | null> => {
+    const a = await tryAccess(ctx, workspaceId);
+    if (!a) return null;
+
+    const { all: tenants, properties, units } = await visibleBooks(ctx, a, workspaceId);
+    const unitName = new Map(units.map((u) => [u._id as string, u.name]));
+    const propertyName = new Map(properties.map((p) => [p._id as string, p.name]));
+    const placeOf = (propertyId?: string, unitId?: string) => {
+      if (!propertyId) return null;
+      const place = propertyName.get(propertyId) ?? null;
+      const unit = unitId ? unitName.get(unitId) : undefined;
+      return place && unit ? `${place} · ${unit}` : place;
+    };
+    const names = new Map<string, string | null>();
+    const nameOf = async (id?: Id<"users">) => {
+      if (!id) return null;
+      if (!names.has(id)) names.set(id, (await ctx.db.get(id))?.name ?? null);
+      return names.get(id) ?? null;
+    };
+
+    const rows: PaymentHistoryRow[] = [];
+    for (const t of tenants) {
+      const payments = await ctx.db
+        .query("payments")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", t._id))
+        .collect();
+      if (payments.length === 0) continue;
+      const tenantPhotoUrl = t.photoId ? await ctx.storage.getUrl(t.photoId) : null;
+      const placeName = placeOf(t.propertyId, t.unitId);
+      for (const p of payments) {
+        rows.push({
+          _id: p._id,
+          tenantId: t._id,
+          tenantName: t.name,
+          tenantPhotoUrl,
+          tenantStatus: t.status,
+          placeName,
+          amount: p.amount,
+          month: p.month,
+          paidOn: p.paidOn,
+          note: p.note ?? null,
+          recordedByName: await nameOf(p.recordedBy),
+        });
+      }
+    }
+
+    rows.sort((x, y) => (x.paidOn === y.paidOn ? y.month.localeCompare(x.month) : y.paidOn.localeCompare(x.paidOn)));
+    return rows;
+  },
+});
+
 /** Dashboard numbers for one month: what's collected and what's left. */
 export const summary = query({
   args: { workspaceId: v.id("users"), month: v.string() },
@@ -223,16 +295,19 @@ export const arrears = query({
  * What a tenant still owes for one month, checked against everything already
  * recorded for it. Drives the payment sheet so the amount can never be typed
  * past the balance — past, present or future month alike.
+ *
+ * `excludePaymentId` leaves one payment out of the "already recorded" total —
+ * pass the payment being edited so its own amount doesn't count against itself.
  */
 export const monthStatus = query({
-  args: { tenantId: v.id("tenants"), month: v.string() },
-  handler: async (ctx, { tenantId, month }) => {
+  args: { tenantId: v.id("tenants"), month: v.string(), excludePaymentId: v.optional(v.id("payments")) },
+  handler: async (ctx, { tenantId, month, excludePaymentId }) => {
     const t = await ctx.db.get(tenantId);
     if (!t) return null;
     const a = await tryAccess(ctx, t.workspaceId);
     if (!a || !seesTenant(a, t)) return null;
     const startMonth = await startMonthOf(ctx, t.workspaceId);
-    const paid = await paidFor(ctx, tenantId, month);
+    const paid = await paidFor(ctx, tenantId, month, excludePaymentId);
     return {
       startMonth,
       rent: t.rent,
@@ -243,13 +318,15 @@ export const monthStatus = query({
   },
 });
 
-/** How much is already recorded for this tenant in this month. */
-async function paidFor(ctx: QueryCtx, tenantId: Id<"tenants">, month: string) {
+/** How much is already recorded for this tenant in this month, optionally leaving one payment out. */
+async function paidFor(ctx: QueryCtx, tenantId: Id<"tenants">, month: string, excludeId?: Id<"payments">) {
   const rows = await ctx.db
     .query("payments")
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
     .collect();
-  return rows.filter((p) => p.month === month).reduce((s, p) => s + p.amount, 0);
+  return rows
+    .filter((p) => p.month === month && p._id !== excludeId)
+    .reduce((s, p) => s + p.amount, 0);
 }
 
 /** Why this month is off-limits for this tenant, or null when it's fine. */
@@ -331,6 +408,55 @@ export const add = mutation({
       note: clean(note),
       recordedBy: a.me._id,
     });
+  },
+});
+
+/**
+ * Corrects a payment already on the books — wrong amount, wrong month, wrong
+ * date. Same-tier access as `remove`: editing history is as sensitive as
+ * erasing it. The same double-entry and window checks as `add` apply, with
+ * the payment's own current amount left out of "already recorded" so it can
+ * be nudged up or down without first deleting it.
+ */
+export const update = mutation({
+  args: {
+    paymentId: v.id("payments"),
+    amount: v.number(),
+    month: v.string(),
+    paidOn: v.string(),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, { paymentId, amount, month, paidOn, note }) => {
+    const p = await ctx.db.get(paymentId);
+    if (!p) throw new ConvexError("Payment not found.");
+    const a = await access(ctx, p.workspaceId, "full");
+    const t = await ctx.db.get(p.tenantId);
+    if (!t) throw new ConvexError("Tenant not found.");
+    assertTenant(a, t);
+    if (!Number.isFinite(amount) || amount <= 0) throw new ConvexError("Enter an amount above zero.");
+
+    const owner = await ctx.db.get(t.workspaceId);
+    const currency = owner?.currency ?? "$";
+    const money = (n: number) => amountIn(currency, n);
+    const startMonth = await startMonthOf(ctx, t.workspaceId);
+    const problem = monthProblem(t, startMonth, month);
+    if (problem) throw new ConvexError(problem);
+
+    // What's already on the books for the (possibly new) month, not counting this payment itself.
+    const paidElsewhere = await paidFor(ctx, p.tenantId, month, paymentId);
+    const remaining = t.rent - paidElsewhere;
+    if (remaining <= 0) {
+      throw new ConvexError(
+        `${t.name} has already paid ${money(t.rent)} in full for ${labelMonth(month)} from other payments. Delete one of those first.`,
+      );
+    }
+    if (amount > remaining) {
+      throw new ConvexError(
+        `Only ${money(remaining)} is left for ${labelMonth(month)} — ${money(paidElsewhere)} of ${money(t.rent)} is already recorded elsewhere.`,
+      );
+    }
+
+    await ctx.db.patch(paymentId, { amount, month, paidOn, note: clean(note) });
   },
 });
 

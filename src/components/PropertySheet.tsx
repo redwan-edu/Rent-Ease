@@ -143,7 +143,7 @@ export default function PropertySheet({
           </div>
         </div>
         <span className="hint-text">
-          How many flats, rooms or floors you rent out here. Name each one so tenants can be placed in it.
+          Each flat, room or floor you rent out here. Name them so tenants can be placed in them.
         </span>
         <div className="unit-list">
           {units.map((u, i) => {

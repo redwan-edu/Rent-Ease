@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { errorMessage, hue, initials } from "@/lib/format";
+import { errorMessage, initials } from "@/lib/format";
 
 export function Logo({ size = 44 }: { size?: number }) {
   return (
@@ -22,11 +22,21 @@ export function Logo({ size = 44 }: { size?: number }) {
   );
 }
 
+/** Full-screen loader: the logo breathing above a thin progress line. With a message it becomes a notice. */
 export function Splash({ message, action }: { message?: string; action?: ReactNode }) {
   return (
-    <div className="splash">
-      <Logo size={56} />
-      {message ? <p className="splash-msg">{message}</p> : <span className="spinner" />}
+    <div className="splash" role={message ? "alert" : "status"} aria-live="polite">
+      <span className={`splash-mark${message ? "" : " loading"}`}>
+        <Logo size={44} />
+      </span>
+      {message ? (
+        <p className="splash-msg">{message}</p>
+      ) : (
+        <>
+          <span className="loader-bar" aria-hidden />
+          <span className="sr-only">Loading</span>
+        </>
+      )}
       {action}
     </div>
   );
@@ -39,27 +49,43 @@ export function Spinner({ size = 18 }: { size?: number }) {
 export function Avatar({
   name,
   url,
-  size = 44,
+  size = 40,
 }: {
   name: string;
   url?: string | null;
   size?: number;
 }) {
-  const h = hue(name);
   return (
-    <span
-      className="avatar"
-      style={{
-        width: size,
-        height: size,
-        fontSize: size * 0.36,
-        background: `hsl(${h} 42% 91%)`,
-        color: `hsl(${h} 32% 30%)`,
-      }}
-    >
+    <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.36 }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {url ? <img src={url} alt="" /> : initials(name)}
     </span>
+  );
+}
+
+/** A titled block of a page: heading, optional count and action, then its content. */
+export function Section({
+  title,
+  count,
+  action,
+  children,
+}: {
+  title: string;
+  count?: number;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <div className="section-head">
+        <h2>
+          {title}
+          {count !== undefined && <span className="count">{count}</span>}
+        </h2>
+        {action}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -122,13 +148,11 @@ export function OverlayPage({
   return createPortal(
     <div className="overlay-page" role="dialog" aria-modal="true" aria-label={title}>
       <div className="scroll no-nav">
-        <header className="header compact">
+        <header className="header sub">
           <button className="icon-btn" onClick={onBack} aria-label="Back">
-            <ChevronLeft size={20} />
+            <ChevronLeft size={22} />
           </button>
-          <div className="header-text">
-            <h1 className="header-title">{title}</h1>
-          </div>
+          <h1 className="header-title">{title}</h1>
         </header>
         {children}
       </div>
@@ -138,8 +162,8 @@ export function OverlayPage({
 }
 
 /**
- * Press-and-hold confirm: the button fills left to right (with a progress bar
- * above it) and only fires once held for the full duration.
+ * Press-and-hold confirm: the button fills left to right and only fires once
+ * held for the full duration, so a stray tap never records anything.
  */
 export function HoldButton({
   label,
@@ -147,20 +171,22 @@ export function HoldButton({
   duration = 1000,
   disabled,
   onComplete,
+  tone = "confirm",
 }: {
   label: string;
   doneLabel: string;
   duration?: number;
   disabled?: boolean;
   onComplete: () => Promise<boolean>;
+  /** "danger" for an undo/delete hold — red fill instead of the usual green. */
+  tone?: "confirm" | "danger";
 }) {
   const [phase, setPhase] = useState<"idle" | "holding" | "busy" | "done">("idle");
   const phaseRef = useRef(phase);
   const progress = useRef(0);
   const startedAt = useRef(0);
   const frame = useRef(0);
-  const trackFill = useRef<HTMLSpanElement>(null);
-  const buttonFill = useRef<HTMLSpanElement>(null);
+  const fill = useRef<HTMLSpanElement>(null);
 
   const set = (p: typeof phase) => {
     phaseRef.current = p;
@@ -168,11 +194,10 @@ export function HoldButton({
   };
 
   const paint = (p: number, animate: boolean) => {
-    for (const el of [trackFill.current, buttonFill.current]) {
-      if (!el) continue;
-      el.style.transition = animate ? "transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)" : "none";
-      el.style.transform = `scaleX(${p})`;
-    }
+    const el = fill.current;
+    if (!el) return;
+    el.style.transition = animate ? "transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)" : "none";
+    el.style.transform = `scaleX(${p})`;
   };
 
   const finish = async () => {
@@ -217,12 +242,9 @@ export function HoldButton({
 
   return (
     <div className="hold">
-      <div className="hold-track" aria-hidden>
-        <span ref={trackFill} />
-      </div>
       <button
         type="button"
-        className={`btn btn-primary hold-btn ${phase}`}
+        className={`btn ${tone === "danger" ? "btn-destructive" : "btn-primary"} hold-btn${tone === "danger" ? " tone-danger" : ""} ${phase}`}
         disabled={disabled || phase === "busy"}
         aria-label={`${label}. Press and hold to confirm.`}
         onPointerDown={(e) => {
@@ -240,7 +262,7 @@ export function HoldButton({
         }}
         onKeyUp={(e) => isKey(e) && release()}
       >
-        <span ref={buttonFill} className="hold-fill" />
+        <span ref={fill} className={`hold-fill${tone === "danger" ? " danger" : ""}`} />
         <span className="hold-label">
           {phase === "done" ? (
             <>
@@ -270,12 +292,15 @@ export function ConfirmSheet({
   confirmLabel,
   onConfirm,
   onClose,
+  tone = "danger",
 }: {
   title: string;
   text: string;
   confirmLabel: string;
   onConfirm: () => Promise<unknown>;
   onClose: () => void;
+  /** "neutral" for confirmations that undo nothing, like restoring a record. */
+  tone?: "danger" | "neutral";
 }) {
   const { run, busy } = useRun();
   return (
@@ -288,8 +313,7 @@ export function ConfirmSheet({
             Cancel
           </button>
           <button
-            className="btn btn-primary"
-            style={{ background: "var(--danger)" }}
+            className={`btn ${tone === "danger" ? "btn-destructive" : "btn-primary"}`}
             disabled={busy}
             onClick={() =>
               run(async () => {
@@ -303,7 +327,7 @@ export function ConfirmSheet({
         </>
       }
     >
-      <p className="muted" style={{ lineHeight: 1.5 }}>
+      <p className="muted" style={{ lineHeight: 1.55 }}>
         {text}
       </p>
     </Sheet>
@@ -387,7 +411,7 @@ export function SkeletonList({ rows = 3 }: { rows?: number }) {
     <div className="card list">
       {Array.from({ length: rows }, (_, i) => (
         <div className="row" key={i}>
-          <span className="skeleton" style={{ width: 44, height: 44, borderRadius: 22 }} />
+          <span className="skeleton" style={{ width: 40, height: 40, borderRadius: 20 }} />
           <div style={{ flex: 1, display: "grid", gap: 8 }}>
             <span className="skeleton" style={{ height: 13, width: "55%" }} />
             <span className="skeleton" style={{ height: 11, width: "35%" }} />

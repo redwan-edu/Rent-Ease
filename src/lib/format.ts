@@ -32,7 +32,7 @@ export function today() {
 }
 
 export function dateLabel(iso?: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "Not recorded";
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, {
     day: "numeric",

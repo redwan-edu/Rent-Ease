@@ -37,7 +37,7 @@ function checkUnitNames(names: string[]) {
   for (const n of names) {
     if (!n) throw new ConvexError("Give every unit a name.");
     const key = n.toLowerCase();
-    if (seen.has(key)) throw new ConvexError(`Unit names must be unique — "${n}" is used twice.`);
+    if (seen.has(key)) throw new ConvexError(`Unit names must be unique. "${n}" is used twice.`);
     seen.add(key);
   }
 }

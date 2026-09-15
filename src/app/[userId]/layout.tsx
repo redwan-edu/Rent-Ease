@@ -2,7 +2,7 @@
 
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { BottomNav, Sidebar, SidebarProvider } from "@/components/AppNav";
+import { BottomNav } from "@/components/AppNav";
 import FontScaleSync from "@/components/FontScaleSync";
 import { Splash, ToastProvider } from "@/components/ui";
 import VerifyEmail from "@/components/VerifyEmail";
@@ -40,14 +40,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <WorkspaceProvider workspaces={workspaces} workspaceId={userId}>
       <ToastProvider>
-        <SidebarProvider>
-          <main className={`scroll${hideNav ? " no-nav" : ""}`}>{children}</main>
-          {!hideNav && <BottomNav />}
-          <Sidebar />
-          <FontScaleSync />
-          <div id="sheet-root" ref={setSheetRoot} />
-          {sheetRoot && invite && <WelcomeSheet invite={invite} />}
-        </SidebarProvider>
+        <main className={`scroll${hideNav ? " no-nav" : ""}`}>{children}</main>
+        {!hideNav && <BottomNav />}
+        <FontScaleSync />
+        <div id="sheet-root" ref={setSheetRoot} />
+        {sheetRoot && invite && <WelcomeSheet invite={invite} />}
       </ToastProvider>
     </WorkspaceProvider>
   );

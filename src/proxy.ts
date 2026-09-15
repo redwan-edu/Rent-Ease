@@ -12,6 +12,8 @@ const PUBLIC_PATHS = [
   /^\/(icon|apple-icon)(\.png)?$/, // favicon + home-screen icon
   /^\/logo\.png$/,
   /^\/join$/, // invite links: the page itself asks visitors to sign in
+  /^\/(robots\.txt|sitemap\.xml)$/, // crawlers must read these without a session
+  /^\/(opengraph-image|twitter-image)(\.\w+)?$/, // link previews on social apps
 ];
 
 function isPublic(req: NextRequest) {

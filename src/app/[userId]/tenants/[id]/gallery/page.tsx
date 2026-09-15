@@ -8,7 +8,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import Header from "@/components/Header";
 import { Lightbox, type GalleryItem } from "@/components/Lightbox";
-import { Empty, Splash } from "@/components/ui";
+import { Empty, Section, Splash } from "@/components/ui";
 
 function kindFor(contentType?: string): "image" | "pdf" | "file" {
   if (!contentType) return "image";
@@ -30,7 +30,7 @@ export default function TenantGalleryPage() {
   if (tenant === undefined || family === undefined) {
     return (
       <>
-        <Header title="" back={`/tenants/${id}`} bell={false} />
+        <Header title="Files" back={`/tenants/${id}`} />
         <Splash />
       </>
     );
@@ -38,8 +38,8 @@ export default function TenantGalleryPage() {
   if (tenant === null) {
     return (
       <>
-        <Header title="Gallery" back="/tenants" bell={false} />
-        <Empty icon={<UserX size={22} />} title="Tenant not found" />
+        <Header title="Files" back="/tenants" />
+        <Empty icon={<UserX size={24} />} title="Tenant not found" />
       </>
     );
   }
@@ -63,7 +63,7 @@ export default function TenantGalleryPage() {
     const items: GalleryItem[] = [];
     if (f.photoUrl) items.push({ url: f.photoUrl, label: `${f.name}'s photo`, kind: "image" });
     f.nid.forEach((n, i) =>
-      items.push({ url: n.url, label: `${f.name} · NID ${i === 0 ? "front" : "back"}`, sub: "Family member", kind: "image" }),
+      items.push({ url: n.url, label: `${f.name}, NID ${i === 0 ? "front" : "back"}`, sub: "Family member", kind: "image" }),
     );
     if (items.length > 0) groups.push({ title: f.name, items });
   }
@@ -73,25 +73,19 @@ export default function TenantGalleryPage() {
 
   return (
     <>
-      <Header title="Gallery" eyebrow={tenant.name} back={`/tenants/${id}`} bell={false} />
+      <Header title={`${tenant.name}'s files`} back={`/tenants/${id}`} />
       <div className="page">
         {flat.length === 0 ? (
           <div className="card">
             <Empty
-              icon={<Images size={22} />}
+              icon={<Images size={24} />}
               title="Nothing to show yet"
               text="Photos and documents you add for this tenant and their family appear here."
             />
           </div>
         ) : (
           groups.map((g, gi) => (
-            <section key={g.title}>
-              <div className="section-head">
-                <h2>{g.title}</h2>
-                <span className="muted" style={{ fontSize: "calc(13px * var(--fs))" }}>
-                  {g.items.length}
-                </span>
-              </div>
+            <Section key={g.title} title={g.title} count={g.items.length}>
               <div className="gallery-grid">
                 {g.items.map((it, ii) => (
                   <button className="gallery-thumb" key={`${it.label}-${ii}`} onClick={() => setOpen(offset(gi) + ii)}>
@@ -105,7 +99,7 @@ export default function TenantGalleryPage() {
                   </button>
                 ))}
               </div>
-            </section>
+            </Section>
           ))
         )}
       </div>

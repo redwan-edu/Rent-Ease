@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { AlarmClock, Building2, Check, CircleCheck, NotebookPen, Plus, UserRound } from "lucide-react";
+import { Check, CircleCheck, NotebookPen, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@convex/_generated/api";
 import Header from "@/components/Header";
@@ -16,7 +16,7 @@ export default function NotesPage() {
   const notes = useQuery(api.notes.list, { workspaceId: workspace.workspaceId, done: tab === "done" });
   const setDone = useMutation(api.notes.setDone);
   const { run } = useRun();
-  // "/notes?new=1" (from the dashboard) opens the composer straight away.
+  // "/notes?new=1" opens the composer straight away.
   const [draft, setDraft] = useState<NoteDraft | null>(() =>
     new URLSearchParams(window.location.search).has("new") && can("edit") ? { body: "" } : null,
   );
@@ -31,8 +31,8 @@ export default function NotesPage() {
         title="Notes"
         actions={
           can("edit") && (
-            <button className="icon-btn dark" onClick={() => setDraft({ body: "" })} aria-label="New note">
-              <Plus size={20} />
+            <button className="btn btn-sm btn-primary" onClick={() => setDraft({ body: "" })}>
+              <Plus size={16} /> Add
             </button>
           )
         }
@@ -42,7 +42,7 @@ export default function NotesPage() {
           value={tab}
           onChange={setTab}
           options={[
-            { value: "open", label: "Open" },
+            { value: "open", label: "To do" },
             { value: "done", label: "Done" },
           ]}
         />
@@ -53,32 +53,35 @@ export default function NotesPage() {
           <div className="card">
             {tab === "open" ? (
               <Empty
-                icon={<NotebookPen size={22} />}
-                title="No open notes"
-                text="Write down requests, issues or plans — like “Tenant wants the tap fixed” — and set a reminder."
+                icon={<NotebookPen size={24} />}
+                title="Nothing to do"
+                text="Write down requests or jobs, like “fix the kitchen tap”, and set a reminder."
                 action={
                   can("edit") && (
                     <button className="btn btn-primary btn-sm" onClick={() => setDraft({ body: "" })}>
-                      <Plus size={16} /> New note
+                      <Plus size={16} /> Add note
                     </button>
                   )
                 }
               />
             ) : (
-              <Empty icon={<CircleCheck size={22} />} title="Nothing done yet" text="Notes you tick off land here." />
+              <Empty icon={<CircleCheck size={24} />} title="Nothing done yet" text="Notes you tick off show up here." />
             )}
           </div>
         ) : (
           <div className="card list">
             {notes.map((n) => {
               const due = n.fired && !n.done;
+              const about = n.tenantName ?? n.propertyName;
               return (
                 <div className={`note${n.done ? " done" : ""}`} key={n._id}>
                   <button
                     className={`check${n.done ? " on" : ""}`}
-                    aria-label={n.done ? "Mark as open" : "Mark as done"}
+                    aria-label={n.done ? "Mark as to do" : "Mark as done"}
                     disabled={!can("edit")}
-                    onClick={() => run(() => setDone({ noteId: n._id, done: !n.done }), n.done ? "Moved to open" : "Marked done")}
+                    onClick={() =>
+                      run(() => setDone({ noteId: n._id, done: !n.done }), n.done ? "Moved back to To do" : "Marked done")
+                    }
                   >
                     <Check size={14} strokeWidth={3} />
                   </button>
@@ -90,25 +93,11 @@ export default function NotesPage() {
                   >
                     <div className="note-body">{n.body}</div>
                     <div className="note-meta">
-                      {n.remindAt && (
-                        <span className={`chip${due ? " warn" : ""}`}>
-                          <AlarmClock size={12} />
-                          {due ? "Due · " : ""}
-                          {whenLabel(n.remindAt)}
-                        </span>
-                      )}
-                      {n.tenantName && (
-                        <span className="chip">
-                          <UserRound size={12} /> {n.tenantName}
-                        </span>
-                      )}
-                      {n.propertyName && (
-                        <span className="chip">
-                          <Building2 size={12} /> {n.propertyName}
-                        </span>
-                      )}
-                      {!n.remindAt && !n.tenantName && !n.propertyName && (
-                        <span className="muted" style={{ fontSize: "calc(12px * var(--fs))" }}>
+                      {due && <span className="badge warn">Due</span>}
+                      {n.remindAt && <span>{whenLabel(n.remindAt)}</span>}
+                      {about && <span>{n.remindAt ? `· ${about}` : about}</span>}
+                      {!n.remindAt && !about && (
+                        <span>
                           {new Date(n._creationTime).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
                         </span>
                       )}

@@ -1,14 +1,14 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { FileText, Wallet } from "lucide-react";
+import { FileText } from "lucide-react";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { dateLabel, monthLabel, whenLabel } from "@/lib/format";
 import { useWorkspace } from "@/lib/workspace";
 import { Lightbox, type GalleryItem } from "./Lightbox";
-import { Avatar, OverlayPage, SkeletonList } from "./ui";
+import { Avatar, OverlayPage, Section, SkeletonList } from "./ui";
 
 /** The complete archived record, read-only, exactly as it was when deleted. */
 export default function ArchiveRecord({
@@ -33,17 +33,17 @@ export default function ArchiveRecord({
   }
 
   const files: GalleryItem[] = [
-    ...(r.photoUrl ? [{ url: r.photoUrl, label: `${r.name} — photo`, kind: "image" as const }] : []),
+    ...(r.photoUrl ? [{ url: r.photoUrl, label: `${r.name}, photo`, kind: "image" as const }] : []),
     ...r.documents.map((d) => ({
       url: d.url,
       label: d.label,
       kind: (d.contentType?.startsWith("image/") ? "image" : d.contentType === "application/pdf" ? "pdf" : "file") as GalleryItem["kind"],
     })),
     ...r.family.flatMap((f) => [
-      ...(f.photoUrl ? [{ url: f.photoUrl, label: `${f.name} — photo`, kind: "image" as const }] : []),
+      ...(f.photoUrl ? [{ url: f.photoUrl, label: `${f.name}, photo`, kind: "image" as const }] : []),
       ...f.nid.map((n, i) => ({
         url: n.url,
-        label: `${f.name} — NID ${i + 1}`,
+        label: `${f.name}, NID ${i + 1}`,
         kind: "image" as const,
       })),
     ]),
@@ -51,57 +51,51 @@ export default function ArchiveRecord({
 
   return (
     <>
-      <OverlayPage title={r.name} onBack={onClose}>
+      <OverlayPage title="Archived record" onBack={onClose}>
         <div className="page">
           <div className="banner">
             Deleted {whenLabel(r.archivedAt)} by {r.archivedByName}
-            {r.reason ? ` · "${r.reason}"` : ""}
+            {r.reason ? ` · “${r.reason}”` : ""}
           </div>
 
-          <div className="card card-pad archive-head">
+          <div className="archive-head">
             <Avatar name={r.name} url={r.photoUrl} size={64} />
-            <div>
-              <h2 style={{ margin: 0 }}>{r.name}</h2>
-              <p className="muted" style={{ margin: "4px 0 0" }}>
-                {r.phone} · {r.placeName ?? "No property"}
-              </p>
-              <p className="muted" style={{ margin: "4px 0 0" }}>
-                Rent {money(r.rent)} · {r.residents} resident{r.residents === 1 ? "" : "s"}
-              </p>
+            <div style={{ minWidth: 0 }}>
+              <h2>{r.name}</h2>
+              <p className="muted">{r.phone}</p>
+              {r.placeName && <p className="muted">{r.placeName}</p>}
             </div>
           </div>
 
           <div className="card list">
-            <div className="row">
-              <div className="row-main">
-                <div className="row-title">Total collected</div>
-                <div className="row-sub">{r.payments.length} payments on record</div>
-              </div>
-              <span className="row-amount">{money(r.totalPaid)}</span>
+            <div className="kv">
+              <span>Total collected</span>
+              <span>{money(r.totalPaid)}</span>
             </div>
-            <div className="row">
-              <div className="row-main">
-                <div className="row-title">Tenancy</div>
-                <div className="row-sub">
-                  {dateLabel(r.movedInOn)} — {r.movedOutOn ? dateLabel(r.movedOutOn) : "no move-out recorded"}
-                </div>
-              </div>
+            <div className="kv">
+              <span>Rent</span>
+              <span>{money(r.rent)} a month</span>
+            </div>
+            <div className="kv">
+              <span>Tenancy</span>
+              <span>
+                {dateLabel(r.movedInOn)} to {r.movedOutOn ? dateLabel(r.movedOutOn) : "no move-out date"}
+              </span>
+            </div>
+            <div className="kv">
+              <span>People living there</span>
+              <span>{r.residents}</span>
             </div>
             {r.condition && (
-              <div className="row">
-                <div className="row-main">
-                  <div className="row-title">Move-in condition</div>
-                  <div className="row-sub">{r.condition}</div>
-                </div>
+              <div className="kv stacked">
+                <span>Condition at move-in</span>
+                <span>{r.condition}</span>
               </div>
             )}
           </div>
 
           {files.length > 0 && (
-            <section>
-              <div className="section-head">
-                <h2>Files ({files.length})</h2>
-              </div>
+            <Section title="Files" count={files.length}>
               <div className="gallery-grid">
                 {files.map((f, i) => (
                   <button key={i} className="gallery-thumb" onClick={() => setViewing(i)}>
@@ -115,50 +109,22 @@ export default function ArchiveRecord({
                   </button>
                 ))}
               </div>
-            </section>
+            </Section>
           )}
 
-          {r.family.length > 0 && (
-            <section>
-              <div className="section-head">
-                <h2>Family</h2>
-              </div>
-              <div className="card list">
-                {r.family.map((f, i) => (
-                  <div className="row" key={i}>
-                    <Avatar name={f.name} url={f.photoUrl} />
-                    <div className="row-main">
-                      <div className="row-title">{f.name}</div>
-                      <div className="row-sub">
-                        {f.age} yrs · {f.phone}
-                        {f.job ? ` · ${f.job}` : ""}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section>
-            <div className="section-head">
-              <h2>Payments</h2>
-            </div>
+          <Section title="Payments" count={r.payments.length || undefined}>
             {r.payments.length === 0 ? (
-              <div className="card card-pad muted">No payments were ever recorded.</div>
+              <p className="section-empty">No payments were ever recorded.</p>
             ) : (
               <div className="card list">
                 {r.payments.map((p) => (
                   <div className="row" key={p._id}>
-                    <span className="row-icon ok">
-                      <Wallet size={18} />
-                    </span>
                     <div className="row-main">
                       <div className="row-title">{monthLabel(p.month)}</div>
                       <div className="row-sub">
                         Paid {dateLabel(p.paidOn)}
+                        {p.recordedByName ? ` by ${p.recordedByName}` : ""}
                         {p.note ? ` · ${p.note}` : ""}
-                        {p.recordedByName ? ` · by ${p.recordedByName}` : ""}
                       </div>
                     </div>
                     <span className="row-amount">{money(p.amount)}</span>
@@ -166,13 +132,28 @@ export default function ArchiveRecord({
                 ))}
               </div>
             )}
-          </section>
+          </Section>
+
+          {r.family.length > 0 && (
+            <Section title="Family" count={r.family.length}>
+              <div className="card list">
+                {r.family.map((f, i) => (
+                  <div className="row" key={i}>
+                    <Avatar name={f.name} url={f.photoUrl} size={36} />
+                    <div className="row-main">
+                      <div className="row-title">{f.name}</div>
+                      <div className="row-sub">
+                        {f.age} yrs · {f.phone}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
 
           {r.notes.length > 0 && (
-            <section>
-              <div className="section-head">
-                <h2>Notes</h2>
-              </div>
+            <Section title="Notes" count={r.notes.length}>
               <div className="card list">
                 {r.notes.map((n, i) => (
                   <div className="row" key={i}>
@@ -183,7 +164,7 @@ export default function ArchiveRecord({
                   </div>
                 ))}
               </div>
-            </section>
+            </Section>
           )}
         </div>
       </OverlayPage>

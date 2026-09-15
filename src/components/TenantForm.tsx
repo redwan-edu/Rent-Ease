@@ -143,7 +143,7 @@ export default function TenantForm({ initial }: { initial?: TenantInitial }) {
     phone: !phone.trim() && "Enter a phone number",
     rent: (rent.trim() === "" || Number.isNaN(rentValue) || rentValue < 0) && "Enter the monthly rent",
     condition: !condition.trim() && "Describe the condition at move-in",
-    // A member limited to certain properties can't leave a tenant unplaced — they'd lose sight of them.
+    // A member limited to certain properties can't leave a tenant unplaced; they'd lose sight of them.
     property: workspace.restricted && !propertyId && "Choose one of your properties",
     unit: !!propertyId && !unitId && "Choose the unit they're renting",
     docs: docs.some((d) => !d.label.trim()) && "Give every document a label",
@@ -317,7 +317,7 @@ export default function TenantForm({ initial }: { initial?: TenantInitial }) {
           </Field>
           <div className="field">
             <span className="label">
-              Residents<span className="req">*</span>
+              People living there<span className="req">*</span>
             </span>
             <div className="stepper">
               <button onClick={() => setResidents((r) => Math.max(1, r - 1))} disabled={residents <= 1} aria-label="Fewer">
@@ -333,39 +333,7 @@ export default function TenantForm({ initial }: { initial?: TenantInitial }) {
       </section>
 
       <section className="form-section">
-        <div className="form-section-row">
-          <h2 className="form-section-title">Family members · {family.length}</h2>
-          <button className="icon-btn sm" onClick={() => setFamilyEditing("new")} aria-label="Add family member">
-            <UserPlus size={16} />
-          </button>
-        </div>
-        {family.length > 0 && (
-          <div className="card list">
-            {family.map((f) => (
-              <button className="row" key={f.key} onClick={() => setFamilyEditing(f)}>
-                <Avatar name={f.name} url={f.photoUrl} size={40} />
-                <div className="row-main">
-                  <div className="row-title">{f.name}</div>
-                  <div className="row-sub">
-                    {f.age} yrs{f.job ? ` · ${f.job}` : ""}
-                  </div>
-                </div>
-                {!f._id ? <span className="badge ok">New</span> : f.dirty && <span className="badge">Edited</span>}
-                <ChevronRight size={18} className="chev" />
-              </button>
-            ))}
-          </div>
-        )}
-        <button className="add-row" onClick={() => setFamilyEditing("new")}>
-          <UserPlus size={17} /> Add family member
-        </button>
-        <span className="hint-text">
-          People living with {name.trim() || "the tenant"}. They&apos;re saved when you save the tenant.
-        </span>
-      </section>
-
-      <section className="form-section">
-        <h2 className="form-section-title">Rent &amp; home</h2>
+        <h2 className="form-section-title">Rent and home</h2>
         <div className="grid-2">
           <Field label="Monthly rent" required error={show(errors.rent)}>
             <div className={`input-wrap${show(errors.rent) ? " invalid" : ""}`}>
@@ -387,7 +355,7 @@ export default function TenantForm({ initial }: { initial?: TenantInitial }) {
             label="Property"
             required={workspace.restricted}
             error={show(errors.property)}
-            hint={properties?.length === 0 ? "Add a property first to assign this tenant." : undefined}
+            hint={properties?.length === 0 ? "Add a property first to place this tenant in it." : undefined}
           >
             <select
               className={`input${show(errors.property) ? " invalid" : ""}`}
@@ -412,7 +380,7 @@ export default function TenantForm({ initial }: { initial?: TenantInitial }) {
               label="Unit"
               required
               error={show(errors.unit)}
-              hint={units?.length === 0 ? "This property has no units yet — add them from the property page." : undefined}
+              hint={units?.length === 0 ? "This property has no units yet. Add them on the property page." : undefined}
             >
               <select
                 className={`input${show(errors.unit) ? " invalid" : ""}`}
@@ -426,7 +394,7 @@ export default function TenantForm({ initial }: { initial?: TenantInitial }) {
                   return (
                     <option key={u._id} value={u._id} disabled={taken}>
                       {u.name}
-                      {taken ? ` — rented to ${u.occupant!.name}` : ""}
+                      {taken ? ` (rented to ${u.occupant!.name})` : ""}
                     </option>
                   );
                 })}
@@ -434,7 +402,7 @@ export default function TenantForm({ initial }: { initial?: TenantInitial }) {
             </Field>
           )}
         </div>
-        <Field label="House condition at move-in" required error={show(errors.condition)}>
+        <Field label="Condition of the home at move-in" required error={show(errors.condition)}>
           <textarea
             className={`input${show(errors.condition) ? " invalid" : ""}`}
             value={condition}
@@ -447,7 +415,37 @@ export default function TenantForm({ initial }: { initial?: TenantInitial }) {
 
       <section className="form-section">
         <h2 className="form-section-title">
-          Documents · {docs.length}/{MAX_DOCS}
+          Family members
+          {family.length > 0 && <span className="count">{family.length}</span>}
+        </h2>
+        {family.length > 0 && (
+          <div className="card list">
+            {family.map((f) => (
+              <button className="row" key={f.key} onClick={() => setFamilyEditing(f)}>
+                <Avatar name={f.name} url={f.photoUrl} size={36} />
+                <div className="row-main">
+                  <div className="row-title">{f.name}</div>
+                  <div className="row-sub">
+                    {f.age} yrs{f.job ? ` · ${f.job}` : ""}
+                  </div>
+                </div>
+                {!f._id ? <span className="badge ok">New</span> : f.dirty && <span className="badge">Edited</span>}
+                <ChevronRight size={18} className="chev" />
+              </button>
+            ))}
+          </div>
+        )}
+        <button className="add-row" onClick={() => setFamilyEditing("new")}>
+          <UserPlus size={17} /> Add family member
+        </button>
+      </section>
+
+      <section className="form-section">
+        <h2 className="form-section-title">
+          Documents
+          <span className="count">
+            {docs.length} of {MAX_DOCS}
+          </span>
         </h2>
         {docs.length > 0 && (
           <div className="docs">
@@ -497,7 +495,7 @@ export default function TenantForm({ initial }: { initial?: TenantInitial }) {
             </button>
           </div>
         )}
-        <span className="hint-text">ID cards, agreements, meter photos — images or PDF, up to {MAX_DOCS}.</span>
+        <span className="hint-text">ID cards, agreements or meter photos. Images or PDF.</span>
       </section>
 
       <div className="form-foot">

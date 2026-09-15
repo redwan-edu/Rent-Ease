@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { AlarmClock, Bell, BellOff, ChevronLeft, ExternalLink, Megaphone, Menu, X } from "lucide-react";
+import { AlarmClock, Bell, BellOff, ChevronLeft, ExternalLink, Megaphone, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -9,73 +9,44 @@ import { api } from "@convex/_generated/api";
 import type { NotificationItem } from "@convex/notifications";
 import { whenLabel } from "@/lib/format";
 import { useWorkspace } from "@/lib/workspace";
-import { useSidebar } from "./AppNav";
 import { Empty, Sheet, useToast } from "./ui";
 
 /**
- * Top bar. Main sections show the Rent Ease brand with the menu button and the
- * page title underneath; sub pages (with `back`) show a compact back bar.
+ * Top bar. Tab pages show a large title and the notification bell; pages
+ * opened from somewhere else (with `back`) show a back arrow and a small title.
  */
 export default function Header({
   title,
-  eyebrow,
   back,
   actions,
-  bell = true,
+  bell = !back,
 }: {
-  title?: string;
-  eyebrow?: string;
+  title: string;
   back?: string;
   actions?: ReactNode;
   bell?: boolean;
 }) {
   const { to } = useWorkspace();
-  const { setOpen } = useSidebar();
-
-  if (back) {
-    return (
-      <header className="header compact">
-        <Link href={to(back)} className="icon-btn" aria-label="Back">
-          <ChevronLeft size={20} />
-        </Link>
-        <div className="header-text">
-          <h1 className="header-title">{title}</h1>
-        </div>
-        <div className="header-actions">
-          {actions}
-          {bell && <NotificationBell />}
-        </div>
-      </header>
-    );
-  }
 
   return (
-    <>
-      <header className="header brand-bar">
-        <button
-          className="icon-btn"
-          onClick={() => setOpen(true)}
-          aria-label="Open menu"
-        >
-          <Menu size={19} />
-        </button>
-        <Link href={to("/")} className="brand">
-          <span>Rent Ease</span>
+    <header className={back ? "header sub" : "header"}>
+      {back && (
+        <Link href={to(back)} className="icon-btn" aria-label="Back">
+          <ChevronLeft size={22} />
         </Link>
+      )}
+      <h1 className="header-title">{title}</h1>
+      {(actions || bell) && (
         <div className="header-actions">
           {actions}
           {bell && <NotificationBell />}
         </div>
-      </header>
-      <div className="title-block">
-        {eyebrow && <div className="header-eyebrow">{eyebrow}</div>}
-        <h1 className="page-title">{title}</h1>
-      </div>
-    </>
+      )}
+    </header>
   );
 }
 
-/** Only http(s) links or in-app paths — never javascript: or data: URLs from a dashboard row. */
+/** Only http(s) links or in-app paths, never javascript: or data: URLs from a dashboard row. */
 function safeLink(link: string | null) {
   if (!link) return null;
   if (link.startsWith("/") && !link.startsWith("//")) return link;
@@ -129,16 +100,16 @@ function NotificationBell() {
         onClick={openPanel}
         aria-label={unread.length > 0 ? `Notifications, ${unread.length} new` : "Notifications"}
       >
-        <Bell size={18} />
+        <Bell size={20} />
         {unread.length > 0 && <span className="bell-dot">{unread.length > 9 ? "9+" : unread.length}</span>}
       </button>
       {shown && (
         <Sheet title="Notifications" onClose={() => setShown(null)}>
           {shown.length === 0 ? (
             <Empty
-              icon={<BellOff size={22} />}
+              icon={<BellOff size={24} />}
               title="You're all caught up"
-              text="Due reminders from your notes and messages from Rent Ease show up here."
+              text="Reminders from your notes show up here."
             />
           ) : (
             <div className="card list">
@@ -147,7 +118,7 @@ function NotificationBell() {
                   const link = safeLink(n.link);
                   return (
                     <div className="row notif" key={n.key}>
-                      <span className="row-icon ok">
+                      <span className="row-icon">
                         <Megaphone size={18} />
                       </span>
                       <div className="row-main">
@@ -159,8 +130,8 @@ function NotificationBell() {
                           </button>
                         )}
                       </div>
-                      <button className="icon-btn sm plain" onClick={() => clear(n.key)} aria-label="Remove notification">
-                        <X size={15} />
+                      <button className="icon-btn sm quiet" onClick={() => clear(n.key)} aria-label="Remove notification">
+                        <X size={16} />
                       </button>
                     </div>
                   );
@@ -194,8 +165,8 @@ function NotificationBell() {
                         Done
                       </button>
                     )}
-                    <button className="icon-btn sm plain" onClick={() => clear(n.key)} aria-label="Remove notification">
-                      <X size={15} />
+                    <button className="icon-btn sm quiet" onClick={() => clear(n.key)} aria-label="Remove notification">
+                      <X size={16} />
                     </button>
                   </div>
                 );

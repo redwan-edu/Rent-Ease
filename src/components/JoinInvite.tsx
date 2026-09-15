@@ -41,7 +41,7 @@ export default function JoinInvite({ workspaceId }: { workspaceId: string }) {
           </span>
           <h2>You&apos;ve been invited</h2>
           <p>
-            Someone added you to their Rent Ease workspace. Sign in — or create an account — using
+            Someone added you to their Rent Ease workspace. Sign in or create an account using
             <strong> the exact email address they invited</strong>, and it opens automatically.
           </p>
           <Link className="btn btn-primary btn-block" href={`/sign-up?redirect_url=${encodeURIComponent(back)}`}>
@@ -154,7 +154,7 @@ function SignedInJoin({ workspaceId, back }: { workspaceId: string; back: string
         <h2>Wrong email address</h2>
         <p>
           You&apos;re signed in as <strong>{invite.email || "an account with no email"}</strong>, but{" "}
-          {invite.ownerName} hasn&apos;t added that address to their team. Ask them to add it — or sign in
+          {invite.ownerName} hasn&apos;t added that address to their team. Ask them to add it, or sign in
           with the address they invited.
         </p>
         <button

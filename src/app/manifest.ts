@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "The simplest way to manage rent, tenants and properties.",
     start_url: "/app",
     display: "standalone",
-    background_color: "#f4f4f0",
-    theme_color: "#f4f4f0",
+    background_color: "#fbfbfa",
+    theme_color: "#fbfbfa",
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

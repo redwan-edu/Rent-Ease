@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { Building2, DoorOpen, MapPin, NotebookPen, Pencil, Plus, Trash2, Users, X } from "lucide-react";
+import { Building2, DoorOpen, Pencil, Plus, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -11,7 +11,7 @@ import Header from "@/components/Header";
 import NoteSheet, { type NoteDraft } from "@/components/NoteSheet";
 import PropertySheet from "@/components/PropertySheet";
 import { kindOf } from "@/components/kinds";
-import { Avatar, ConfirmSheet, Empty, Field, Sheet, Splash, useRun, useToast } from "@/components/ui";
+import { Avatar, ConfirmSheet, Empty, Field, Section, Sheet, Splash, useRun, useToast } from "@/components/ui";
 import { dateLabel, monthKey, whenLabel } from "@/lib/format";
 import { useWorkspace } from "@/lib/workspace";
 
@@ -40,7 +40,7 @@ export default function PropertyPage() {
   if (property === undefined) {
     return (
       <>
-        <Header title="" back="/properties" />
+        <Header title="Property" back="/properties" />
         <Splash />
       </>
     );
@@ -49,12 +49,12 @@ export default function PropertyPage() {
     return (
       <>
         <Header title="Property" back="/properties" />
-        <Empty icon={<Building2 size={22} />} title="Property not found" />
+        <Empty icon={<Building2 size={24} />} title="Property not found" />
       </>
     );
   }
 
-  const { Icon, label } = kindOf(property.kind);
+  const { label } = kindOf(property.kind);
   const monthly = property.active.reduce((s, t) => s + t.rent, 0);
   const vacant = property.units.filter((u) => !u.occupant);
   const rented = property.units.length - vacant.length;
@@ -66,73 +66,50 @@ export default function PropertyPage() {
   return (
     <>
       <Header
-        title={property.name}
+        title="Property"
         back="/properties"
         actions={
           can("edit") && (
-            <button className="icon-btn" onClick={() => setEditing(true)} aria-label="Edit property">
-              <Pencil size={17} />
+            <button className="btn btn-sm btn-secondary" onClick={() => setEditing(true)}>
+              <Pencil size={15} /> Edit
             </button>
           )
         }
       />
       <div className="page">
         <section className="profile">
-          <span className="kind-tile lg">
-            <Icon size={30} />
-          </span>
-          <h2>{property.name}</h2>
-          <div className="profile-sub">
-            <span className="badge">{label}</span>
-            {property.address && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <MapPin size={13} /> {property.address}
-              </span>
+          <div className="profile-text">
+            <h2>{property.name}</h2>
+            <div className="profile-sub">{property.address ? `${label} · ${property.address}` : label}</div>
+            {property.units.length > 0 && (
+              <div className="profile-sub">
+                {rented} of {property.units.length} {property.units.length === 1 ? "unit" : "units"} rented,{" "}
+                {money(monthly)} a month
+              </div>
             )}
           </div>
         </section>
 
-        <div className="stats">
-          <div className="stat">
-            <span className="stat-label">
-              <DoorOpen size={14} /> Units
-            </span>
-            <span className="stat-value">{property.units.length}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">
-              <Users size={14} /> Rented
-            </span>
-            <span className="stat-value">
-              {rented}
-              <span className="muted" style={{ fontSize: "calc(15px * var(--fs))" }}>
-                /{property.units.length}
-              </span>
-            </span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Monthly rent</span>
-            <span className="stat-value">{money(monthly)}</span>
-          </div>
-        </div>
+        {property.notes && <p className="memo">{property.notes}</p>}
 
-        {property.notes && (
-          <div className="card card-pad">
-            <p className="prose">{property.notes}</p>
-          </div>
-        )}
-
-        <section>
-          <div className="section-head">
-            <h2>Units</h2>
-            {can("edit") && vacant.length > 0 && <button onClick={() => openAssign()}>Assign tenant</button>}
-          </div>
+        <Section
+          title="Units"
+          count={property.units.length || undefined}
+          action={
+            can("edit") &&
+            vacant.length > 0 && (
+              <button className="link-btn" onClick={() => openAssign()}>
+                Assign tenant
+              </button>
+            )
+          }
+        >
           {property.units.length === 0 ? (
             <div className="card">
               <Empty
-                icon={<DoorOpen size={22} />}
+                icon={<DoorOpen size={24} />}
                 title="No units yet"
-                text="Add the flats or rooms in this property so you can place tenants in them."
+                text="Add the flats or rooms here so tenants can be placed in them."
                 action={
                   can("edit") && (
                     <button className="btn btn-primary btn-sm" onClick={() => setEditing(true)}>
@@ -147,33 +124,32 @@ export default function PropertyPage() {
               {property.units.map((u) =>
                 u.occupant ? (
                   <div className="row" key={u._id}>
-                    <Link href={to(`/tenants/${u.occupant._id}`)} style={{ display: "contents" }}>
+                    <Link href={to(`/tenants/${u.occupant._id}`)} className="contents">
                       <Avatar name={u.occupant.name} url={u.occupant.photoUrl} />
                       <div className="row-main">
-                        <div className="row-title">{u.name}</div>
-                        <div className="row-sub">
-                          {u.occupant.name} · {money(u.occupant.rent)}/mo
-                        </div>
+                        <span className="unit-tag">{u.name}</span>
+                        <div className="row-title">{u.occupant.name}</div>
                       </div>
                     </Link>
+                    <span className="row-amount">{money(u.occupant.rent)}</span>
                     {can("edit") && !workspace.restricted && (
                       <button
-                        className="icon-btn sm plain"
+                        className="icon-btn sm quiet"
                         aria-label={`Unassign ${u.occupant.name}`}
                         onClick={() => run(() => assign({ tenantId: u.occupant!._id }), `${u.occupant!.name} unassigned`)}
                       >
-                        <X size={15} />
+                        <X size={16} />
                       </button>
                     )}
                   </div>
                 ) : (
                   <div className="row" key={u._id}>
-                    <span className="row-icon">
-                      <DoorOpen size={18} />
+                    <span className="avatar vacant" style={{ width: 40, height: 40 }}>
+                      <DoorOpen size={17} />
                     </span>
                     <div className="row-main">
-                      <div className="row-title">{u.name}</div>
-                      <div className="row-sub">Vacant</div>
+                      <span className="unit-tag">{u.name}</span>
+                      <div className="row-title muted">Vacant</div>
                     </div>
                     {can("edit") && (
                       <button className="btn btn-sm btn-secondary" onClick={() => openAssign(u._id)}>
@@ -185,18 +161,15 @@ export default function PropertyPage() {
               )}
             </div>
           )}
-        </section>
+        </Section>
 
         {property.withoutUnit.length > 0 && (
-          <section>
-            <div className="section-head">
-              <h2>Needs a unit</h2>
-            </div>
+          <Section title="Needs a unit">
             <div className="card list">
               {property.withoutUnit.map((t) => (
                 <div className="row" key={t._id}>
-                  <Link href={to(`/tenants/${t._id}`)} style={{ display: "contents" }}>
-                    <Avatar name={t.name} url={t.photoUrl} size={40} />
+                  <Link href={to(`/tenants/${t._id}`)} className="contents">
+                    <Avatar name={t.name} url={t.photoUrl} />
                     <div className="row-main">
                       <div className="row-title">{t.name}</div>
                       <div className="row-sub">No unit set yet</div>
@@ -210,18 +183,21 @@ export default function PropertyPage() {
                 </div>
               ))}
             </div>
-          </section>
+          </Section>
         )}
 
-        <section>
-          <div className="section-head">
-            <h2>Open notes</h2>
-            {can("edit") && <button onClick={() => setNote({ body: "", propertyId })}>Add note</button>}
-          </div>
+        <Section
+          title="Open notes"
+          action={
+            can("edit") && (
+              <button className="link-btn" onClick={() => setNote({ body: "", propertyId })}>
+                Add note
+              </button>
+            )
+          }
+        >
           {propertyNotes.length === 0 ? (
-            <div className="card">
-              <Empty icon={<NotebookPen size={22} />} title="No open notes" />
-            </div>
+            <p className="section-empty">No open notes.</p>
           ) : (
             <div className="card list">
               {propertyNotes.map((n) => (
@@ -232,44 +208,47 @@ export default function PropertyPage() {
                     setNote({ _id: n._id, body: n.body, tenantId: n.tenantId, propertyId: n.propertyId, remindAt: n.remindAt })
                   }
                 >
-                  <span className="row-icon">
-                    <NotebookPen size={17} />
-                  </span>
                   <div className="row-main">
                     <div className="row-title clamp-2">{n.body}</div>
-                    {n.remindAt && <div className="row-sub">Reminder · {whenLabel(n.remindAt)}</div>}
+                    {n.remindAt && <div className="row-sub">Reminder: {whenLabel(n.remindAt)}</div>}
                   </div>
                 </button>
               ))}
             </div>
           )}
-        </section>
+        </Section>
 
         {property.former.length > 0 && (
-          <section>
-            <div className="section-head">
-              <h2>Past tenants</h2>
-            </div>
+          <Section title="Past tenants">
             <div className="card list">
               {property.former.map((t) => (
                 <Link href={to(`/tenants/${t._id}`)} className="row" key={t._id}>
-                  <Avatar name={t.name} url={t.photoUrl} size={38} />
+                  <Avatar name={t.name} url={t.photoUrl} size={36} />
                   <div className="row-main">
                     <div className="row-title">{t.name}</div>
                     <div className="row-sub">
-                      {t.unitName ? `${t.unitName} · ` : ""}Moved out {dateLabel(t.moveOutDate)}
+                      {t.unitName ? `${t.unitName} · ` : ""}
+                      {t.moveOutDate ? `Moved out ${dateLabel(t.moveOutDate)}` : "Moved out"}
                     </div>
                   </div>
                 </Link>
               ))}
             </div>
-          </section>
+          </Section>
         )}
 
         {can("full") && (
-          <button className="btn btn-danger btn-block" onClick={() => setConfirmDelete(true)}>
-            <Trash2 size={17} /> Delete property
-          </button>
+          <section className="danger-zone">
+            <div className="dz-part">
+              <div>
+                <strong>Delete property</strong>
+                <p>Its units are deleted too. Tenants stay in your records.</p>
+              </div>
+              <button className="btn btn-sm btn-danger" onClick={() => setConfirmDelete(true)}>
+                Delete
+              </button>
+            </div>
+          </section>
         )}
       </div>
 
@@ -307,14 +286,14 @@ export default function PropertyPage() {
               {property.units.map((u) => (
                 <option key={u._id} value={u._id} disabled={!!u.occupant}>
                   {u.name}
-                  {u.occupant ? ` — rented to ${u.occupant.name}` : ""}
+                  {u.occupant ? ` (rented to ${u.occupant.name})` : ""}
                 </option>
               ))}
             </select>
           </Field>
           {candidates.length === 0 ? (
             <Empty
-              icon={<Users size={22} />}
+              icon={<Users size={24} />}
               title="No tenants to assign"
               text="Every current tenant already has a unit here. Add a new tenant instead."
             />
@@ -335,12 +314,12 @@ export default function PropertyPage() {
                       }, `${t.name} assigned`);
                     }}
                   >
-                    <Avatar name={t.name} url={t.photoUrl} size={40} />
+                    <Avatar name={t.name} url={t.photoUrl} />
                     <div className="row-main">
                       <div className="row-title">{t.name}</div>
                       <div className="row-sub">
                         {t.propertyName
-                          ? `Currently at ${t.propertyName}${t.unitName ? ` · ${t.unitName}` : ""}`
+                          ? `Now at ${t.propertyName}${t.unitName ? ` · ${t.unitName}` : ""}`
                           : "Not assigned"}
                       </div>
                     </div>

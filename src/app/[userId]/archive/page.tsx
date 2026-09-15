@@ -1,27 +1,17 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import {
-  Archive,
-  FileText,
-  Images,
-  RotateCcw,
-  Search,
-  Trash2,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { Archive, ChevronRight, RotateCcw, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import ArchiveRecord from "@/components/ArchiveRecord";
 import Header from "@/components/Header";
 import { Avatar, ConfirmSheet, Empty, SkeletonList, useRun } from "@/components/ui";
-import { dateLabel, whenLabel } from "@/lib/format";
 import { useWorkspace } from "@/lib/workspace";
 
 /**
- * Deleted tenants, kept in full. Nothing here has been thrown away — it is the
+ * Deleted tenants, kept in full. Nothing here has been thrown away: it is the
  * evidence if a former tenant ever disputes what they paid or handed over.
  */
 export default function ArchivePage() {
@@ -43,17 +33,15 @@ export default function ArchivePage() {
 
   return (
     <>
-      <Header title="Archive" />
+      <Header title="Archive" back="/more" />
       <div className="page">
-        <div className="banner">
-          <Archive size={16} />
-          Deleted tenants are kept here in full — profile, family, payments, notes and every
-          uploaded file.
-        </div>
+        {rows && rows.length > 0 && (
+          <p className="lead">Deleted tenants stay here with their full history, so you keep the proof.</p>
+        )}
 
-        {rows && rows.length > 4 && (
+        {rows && rows.length > 5 && (
           <div className="input-wrap">
-            <Search size={17} color="var(--ink-3)" />
+            <Search size={17} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -68,14 +56,14 @@ export default function ArchivePage() {
         ) : rows.length === 0 ? (
           <div className="card">
             <Empty
-              icon={<Archive size={22} />}
+              icon={<Archive size={24} />}
               title="Nothing archived"
-              text="Tenants you delete land here with their whole history intact."
+              text="Tenants you delete land here with their whole history."
             />
           </div>
         ) : list.length === 0 ? (
           <div className="card">
-            <Empty icon={<Search size={22} />} title="No matches" />
+            <Empty icon={<Search size={24} />} title="No matches" />
           </div>
         ) : (
           <div className="stack">
@@ -85,36 +73,14 @@ export default function ArchivePage() {
                   <Avatar name={r.name} url={null} />
                   <div className="row-main">
                     <div className="row-title">{r.name}</div>
-                    <div className="row-sub">
-                      {r.placeName ?? "No property"} · deleted {whenLabel(r.archivedAt)}
-                    </div>
+                    <div className="row-sub">{r.placeName ?? "No property"}</div>
                   </div>
                   <div className="row-end">
                     <span className="row-amount">{money(r.totalPaid)}</span>
-                    <span className="badge">collected</span>
+                    <span className="row-sub">collected</span>
                   </div>
+                  <ChevronRight size={18} className="chev" />
                 </button>
-
-                <div className="archive-facts">
-                  <span>
-                    <Wallet size={14} /> {r.paymentCount} payment{r.paymentCount === 1 ? "" : "s"}
-                  </span>
-                  <span>
-                    <Users size={14} /> {r.familyCount} family
-                  </span>
-                  <span>
-                    <Images size={14} /> {r.fileCount} file{r.fileCount === 1 ? "" : "s"}
-                  </span>
-                  <span>
-                    <FileText size={14} /> {r.noteCount} note{r.noteCount === 1 ? "" : "s"}
-                  </span>
-                </div>
-
-                <div className="archive-meta">
-                  Rented {dateLabel(r.movedInOn)} — {r.movedOutOn ? dateLabel(r.movedOutOn) : "no move-out recorded"} ·
-                  deleted by {r.archivedByName}
-                  {r.reason ? ` · "${r.reason}"` : ""}
-                </div>
 
                 {can("full") && (
                   <div className="archive-actions">
@@ -126,8 +92,7 @@ export default function ArchivePage() {
                     </button>
                     {workspace.role === "owner" && (
                       <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ color: "var(--danger)" }}
+                        className="btn btn-ghost btn-sm danger-text"
                         onClick={() => setConfirmPurge({ id: r._id, name: r.name })}
                       >
                         <Trash2 size={15} /> Erase forever
@@ -148,6 +113,7 @@ export default function ArchivePage() {
           title={`Restore ${confirmRestore.name}?`}
           text="They come back as a former tenant with every payment, family member and file. You can mark them current again afterwards."
           confirmLabel="Restore"
+          tone="neutral"
           onClose={() => setConfirmRestore(null)}
           onConfirm={() =>
             run(() => restore({ archiveId: confirmRestore.id }), `${confirmRestore.name} restored`)

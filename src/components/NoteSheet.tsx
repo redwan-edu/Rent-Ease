@@ -63,7 +63,7 @@ export default function NoteSheet({ note, onClose }: { note: NoteDraft; onClose:
         else await create({ workspaceId, ...args });
         onClose();
       },
-      note._id ? "Note updated" : remindAt ? "Note saved · reminder set" : "Note saved",
+      note._id ? "Note updated" : remindAt ? "Note saved, reminder set" : "Note saved",
     );
   };
 
@@ -193,7 +193,7 @@ export default function NoteSheet({ note, onClose }: { note: NoteDraft; onClose:
                 return (
                   <div className={`remind-summary${past ? " past" : ""}`}>
                     <AlarmClock size={15} />
-                    {past ? "That time has passed — pick a later one" : `Reminds you ${whenLabel(ts)}`}
+                    {past ? "That time has passed. Pick a later one." : `Reminds you ${whenLabel(ts)}`}
                   </div>
                 );
               })()}

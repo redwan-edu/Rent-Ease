@@ -1,15 +1,13 @@
 "use client";
 
-import { useClerk, useUser } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import {
-  Bell,
   BellOff,
   Building2,
   Check,
   DoorOpen,
   Link2,
-  LogOut,
   Mail,
   MailWarning,
   Trash2,
@@ -22,9 +20,23 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import Header from "@/components/Header";
 import PushPrompt from "@/components/PushPrompt";
-import { Avatar, ConfirmSheet, Field, Sheet, Spinner, useRun } from "@/components/ui";
-import { applyFontScale, FONT_SCALES, type FontScaleKey } from "@/lib/fontScale";
+import {
+  Avatar,
+  ConfirmSheet,
+  Field,
+  Section,
+  Segmented,
+  Sheet,
+  Spinner,
+  useRun,
+} from "@/components/ui";
+import {
+  applyFontScale,
+  FONT_SCALES,
+  type FontScaleKey,
+} from "@/lib/fontScale";
 import { disablePush, hasSubscription, pushState } from "@/lib/push";
+import { saveTheme, storedTheme, THEMES, type ThemeKey } from "@/lib/theme";
 import { roleLabel, useWorkspace } from "@/lib/workspace";
 
 type MemberRole = "full" | "edit" | "read";
@@ -32,9 +44,21 @@ type MemberRole = "full" | "edit" | "read";
 type Scope = Id<"properties">[] | null;
 
 const ROLES: { value: MemberRole; label: string; text: string }[] = [
-  { value: "full", label: "Full access", text: "Add, edit and remove anything" },
-  { value: "edit", label: "Edit access", text: "Add and edit, but can't remove" },
-  { value: "read", label: "Read only", text: "Can view everything, change nothing" },
+  {
+    value: "full",
+    label: "Full access",
+    text: "Add, edit and remove anything",
+  },
+  {
+    value: "edit",
+    label: "Edit access",
+    text: "Add and edit, but can't remove",
+  },
+  {
+    value: "read",
+    label: "Read only",
+    text: "Can view everything, change nothing",
+  },
 ];
 
 const CURRENCIES = ["$", "€", "£", "৳", "₹", "AED", "SAR", "¥"];
@@ -46,11 +70,12 @@ function scopeLabel(scope: Scope) {
 }
 
 export default function SettingsPage() {
-  const { user } = useUser();
-  const { signOut, openUserProfile } = useClerk();
   const { workspace, workspaces, switchTo, can } = useWorkspace();
   const isOwner = workspace.role === "owner";
-  const members = useQuery(api.members.list, isOwner ? { workspaceId: workspace.workspaceId } : "skip");
+  const members = useQuery(
+    api.members.list,
+    isOwner ? { workspaceId: workspace.workspaceId } : "skip",
+  );
   const setCurrency = useMutation(api.users.setCurrency);
   const setRole = useMutation(api.members.setRole);
   const removeMember = useMutation(api.members.remove);
@@ -61,14 +86,29 @@ export default function SettingsPage() {
   const textSize: FontScaleKey = me?.fontScale ?? "md";
   const { run } = useRun();
 
+  const { user } = useUser();
+  const email = user?.primaryEmailAddress?.emailAddress || me?.email || "";
+  const name = user?.fullName || me?.name || email || "You";
+  const avatarUrl = user?.imageUrl || me?.imageUrl;
+
   const [adding, setAdding] = useState(false);
-  const [removing, setRemoving] = useState<{ id: Id<"members">; email: string } | null>(null);
-  const [scoping, setScoping] = useState<{ id: Id<"members">; email: string; scope: Scope } | null>(null);
+  const [removing, setRemoving] = useState<{
+    id: Id<"members">;
+    email: string;
+  } | null>(null);
+  const [scoping, setScoping] = useState<{
+    id: Id<"members">;
+    email: string;
+    scope: Scope;
+  } | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [pushOn, setPushOn] = useState(false);
+  const [theme, setTheme] = useState<ThemeKey>(storedTheme);
 
   useEffect(() => {
-    hasSubscription().then(setPushOn).catch(() => {});
+    hasSubscription()
+      .then(setPushOn)
+      .catch(() => {});
   }, []);
 
   const shareInvite = () =>
@@ -80,7 +120,7 @@ export default function SettingsPage() {
           await navigator.share({ title: "Rent Ease invite", text, url });
           return;
         } catch {
-          // Share sheet dismissed — fall through to copying.
+          // Share sheet dismissed, fall through to copying.
         }
       }
       await navigator.clipboard.writeText(url);
@@ -88,84 +128,71 @@ export default function SettingsPage() {
 
   return (
     <>
-      <Header title="Settings" />
+      <Header title="Settings" back="/more" />
       <div className="page">
-        <div className="card">
-          <div className="account">
-            <Avatar name={user?.fullName || user?.primaryEmailAddress?.emailAddress || "You"} url={user?.imageUrl} size={54} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <strong>{user?.fullName || "Your account"}</strong>
-              <div className="row-sub">{user?.primaryEmailAddress?.emailAddress}</div>
+        <Section title="Profile">
+          <div className="card account">
+            <Avatar name={name} url={avatarUrl} size={48} />
+            <div className="row-main">
+              <div className="row-title">{name}</div>
+              <div className="row-sub">{email}</div>
             </div>
-            <button className="btn btn-sm btn-secondary" onClick={() => openUserProfile()}>
-              Manage
-            </button>
+            <span className="badge">{roleLabel[workspace.role]}</span>
           </div>
-        </div>
+          <p className="hint-text" style={{ marginTop: 10 }}>
+            Read only. Profile details cannot be edited here.
+          </p>
+        </Section>
 
-        <section>
-          <div className="section-head">
-            <h2>Text size</h2>
-          </div>
-          <div className="card card-pad" style={{ display: "grid", gap: 14 }}>
-            <div className="size-pick" role="radiogroup" aria-label="Text size">
-              {FONT_SCALES.map((s) => (
-                <button
-                  key={s.key}
-                  role="radio"
-                  aria-checked={textSize === s.key}
-                  className={textSize === s.key ? "on" : ""}
-                  onClick={() => {
-                    applyFontScale(s.key);
-                    run(() => setFontScale({ scale: s.key }));
-                  }}
-                >
-                  <span style={{ fontSize: s.sample }}>A</span>
-                  <small>{s.label}</small>
-                </button>
-              ))}
-            </div>
-            <p className="hint-text">Saved to your account, so the app uses this size on every device you sign in on.</p>
-          </div>
-        </section>
+        <Section title="Appearance">
+          <Segmented
+            value={theme}
+            onChange={(key) => {
+              setTheme(key);
+              saveTheme(key);
+            }}
+            options={THEMES.map((t) => ({ value: t.key, label: t.label }))}
+          />
+          <p className="hint-text" style={{ marginTop: 10 }}>
+            Saved on this device. Automatic follows your phone&apos;s light or
+            dark setting.
+          </p>
+        </Section>
 
-        {workspaces.length > 1 && (
-          <section>
-            <div className="section-head">
-              <h2>Workspaces</h2>
-            </div>
-            <div className="role-pick">
-              {workspaces.map((w) => (
-                <button
-                  key={w.workspaceId}
-                  className={w.workspaceId === workspace.workspaceId ? "on" : ""}
-                  onClick={() => switchTo(w.workspaceId)}
-                >
-                  <span className="radio" />
-                  <div style={{ flex: 1 }}>
-                    <strong>{w.role === "owner" ? "My workspace" : `${w.name}'s workspace`}</strong>
-                    <span>
-                      {roleLabel[w.role]}
-                      {w.restricted && " · selected properties"}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section>
-          <div className="section-head">
-            <h2>Notifications</h2>
+        <Section title="Text size">
+          <div className="size-pick" role="radiogroup" aria-label="Text size">
+            {FONT_SCALES.map((s) => (
+              <button
+                key={s.key}
+                role="radio"
+                aria-checked={textSize === s.key}
+                className={textSize === s.key ? "on" : ""}
+                onClick={() => {
+                  applyFontScale(s.key);
+                  run(() => setFontScale({ scale: s.key }));
+                }}
+              >
+                <span style={{ fontSize: s.sample }}>A</span>
+                <small>{s.label}</small>
+              </button>
+            ))}
           </div>
+          <p className="hint-text" style={{ marginTop: 10 }}>
+            Used on every device you sign in on.
+          </p>
+        </Section>
+
+        <Section title="Notifications">
           {pushState() === "granted" ? (
             <div className="card">
               <div className="toggle-row">
-                {pushOn ? <Bell size={20} /> : <BellOff size={20} color="var(--ink-3)" />}
                 <div>
                   <strong>Reminders on this device</strong>
-                  <span>{pushOn ? "You'll get a notification when a reminder is due" : "Off"}</span>
+                  <span>
+                    {pushOn
+                      ? "On. You get a notification when a reminder is due."
+                      : "Off"}
+                  </span>
                 </div>
                 {pushOn && (
                   <button
@@ -185,62 +212,87 @@ export default function SettingsPage() {
           ) : pushState() === "unsupported" ? (
             <div className="hint">
               <BellOff size={18} />
-              <div>This browser doesn&apos;t support notifications. Reminders still appear in the bell.</div>
+              <div>
+                This browser can&apos;t show notifications. Reminders still
+                appear under the bell.
+              </div>
             </div>
           ) : (
             <PushPrompt />
           )}
-        </section>
+        </Section>
 
-        <section>
-          <div className="section-head">
-            <h2>Currency</h2>
-          </div>
-          <div className="chips">
-            {CURRENCIES.map((c) => (
-              <button
-                key={c}
-                className={`chip${workspace.currency === c ? " on" : ""}`}
-                style={{ minWidth: 44, justifyContent: "center", height: 36, fontSize: "calc(14px * var(--fs))" }}
-                disabled={!isOwner}
-                onClick={() => run(() => setCurrency({ workspaceId: workspace.workspaceId, currency: c }), "Currency updated")}
-              >
-                {c}
+        {isOwner && (
+          <Section title="Currency">
+            <div className="chips">
+              {CURRENCIES.map((c) => (
+                <button
+                  key={c}
+                  className={`chip${workspace.currency === c ? " on" : ""}`}
+                  aria-pressed={workspace.currency === c}
+                  onClick={() =>
+                    run(
+                      () =>
+                        setCurrency({
+                          workspaceId: workspace.workspaceId,
+                          currency: c,
+                        }),
+                      "Currency updated",
+                    )
+                  }
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        <Section
+          title="Team"
+          action={
+            isOwner && (
+              <button className="link-btn" onClick={() => setAdding(true)}>
+                Add person
               </button>
-            ))}
-          </div>
-        </section>
-
-        <section>
-          <div className="section-head">
-            <h2>Team</h2>
-            {isOwner && <button onClick={() => setAdding(true)}>Add person</button>}
-          </div>
+            )
+          }
+        >
           {!isOwner ? (
             <div className="stack">
               <div className="hint">
                 <UserCog size={18} />
                 <div>
                   <strong>{roleLabel[workspace.role]}</strong>
-                  You&apos;re a member of {workspace.name}&apos;s workspace. Only the owner can manage the team.
-                  {!can("edit") && " You can view everything but can't make changes."}
-                  {workspace.restricted && " You only see the properties the owner assigned to you."}
+                  You&apos;re a member of {workspace.name}&apos;s workspace.
+                  Only the owner can manage the team.
+                  {!can("edit") &&
+                    " You can view everything but can't make changes."}
+                  {workspace.restricted &&
+                    " You only see the properties the owner gave you."}
                 </div>
               </div>
-              <button className="btn btn-secondary btn-block" onClick={() => setLeaving(true)}>
+              <button
+                className="btn btn-secondary btn-block"
+                onClick={() => setLeaving(true)}
+              >
                 <DoorOpen size={17} /> Leave this workspace
               </button>
             </div>
           ) : members === undefined ? (
-            <div className="card card-pad" style={{ display: "grid", placeItems: "center" }}>
+            <div
+              className="card card-pad"
+              style={{ display: "grid", placeItems: "center" }}
+            >
               <Spinner />
             </div>
           ) : members.length === 0 ? (
-            <button className="hint" style={{ border: 0, width: "100%", textAlign: "left" }} onClick={() => setAdding(true)}>
+            <button className="hint" onClick={() => setAdding(true)}>
               <Users size={18} />
               <div>
                 <strong>Invite your team</strong>
-                Add a manager or family member by email and choose what they can do.
+                Add a manager or family member by email and choose what they can
+                do.
               </div>
             </button>
           ) : (
@@ -249,23 +301,27 @@ export default function SettingsPage() {
                 {members.map((m) => (
                   <div className="member" key={m._id}>
                     <div className="row">
-                      <Avatar name={m.name ?? m.email} size={40} />
+                      <Avatar name={m.name ?? m.email} />
                       <div className="row-main">
                         <div className="row-title">{m.name ?? m.email}</div>
-                        <div className={`row-sub${!m.joined || m.unverified ? " warn-text" : ""}`}>
+                        <div
+                          className={`row-sub${!m.joined || m.unverified ? " warn-text" : ""}`}
+                        >
                           {!m.joined
                             ? `Waiting for them to sign up as ${m.email}`
                             : m.unverified
-                              ? `${m.email} · email not verified, no access yet`
+                              ? "Email not verified yet, no access"
                               : m.email}
                         </div>
                       </div>
                       <button
-                        className="icon-btn sm plain"
-                        onClick={() => setRemoving({ id: m._id, email: m.email })}
+                        className="icon-btn sm quiet"
+                        onClick={() =>
+                          setRemoving({ id: m._id, email: m.email })
+                        }
                         aria-label={`Remove ${m.email}`}
                       >
-                        <Trash2 size={15} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                     <div className="member-controls">
@@ -273,7 +329,16 @@ export default function SettingsPage() {
                         className="select-sm"
                         value={m.role}
                         aria-label={`Role for ${m.email}`}
-                        onChange={(e) => run(() => setRole({ memberId: m._id, role: e.target.value as MemberRole }), "Role updated")}
+                        onChange={(e) =>
+                          run(
+                            () =>
+                              setRole({
+                                memberId: m._id,
+                                role: e.target.value as MemberRole,
+                              }),
+                            "Role updated",
+                          )
+                        }
                       >
                         {ROLES.map((r) => (
                           <option key={r.value} value={r.value}>
@@ -283,7 +348,13 @@ export default function SettingsPage() {
                       </select>
                       <button
                         className="chip"
-                        onClick={() => setScoping({ id: m._id, email: m.email, scope: m.propertyIds })}
+                        onClick={() =>
+                          setScoping({
+                            id: m._id,
+                            email: m.email,
+                            scope: m.propertyIds,
+                          })
+                        }
                       >
                         <Building2 size={14} /> {scopeLabel(m.propertyIds)}
                       </button>
@@ -296,25 +367,31 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
-              <button className="btn btn-secondary btn-block" onClick={shareInvite}>
+              <button
+                className="btn btn-secondary btn-block"
+                onClick={shareInvite}
+              >
                 <Link2 size={17} /> Share invite link
               </button>
               <p className="hint-text">
-                The link opens your workspace for anyone you&apos;ve added — they must sign in with the exact
-                email address above. It does nothing for anyone else.
+                The link only works for people you added, signed in with that
+                exact email address.
               </p>
             </div>
           )}
-        </section>
-
-        <button className="btn btn-secondary btn-block" onClick={() => signOut({ redirectUrl: "/" })}>
-          <LogOut size={17} /> Sign out
-        </button>
-        <p className="footer-note">Rent Ease · v1.0</p>
+        </Section>
       </div>
 
-      {adding && <AddMemberSheet workspaceId={workspace.workspaceId} onClose={() => setAdding(false)} onShare={shareInvite} />}
-      {scoping && <ScopeSheet member={scoping} onClose={() => setScoping(null)} />}
+      {adding && (
+        <AddMemberSheet
+          workspaceId={workspace.workspaceId}
+          onClose={() => setAdding(false)}
+          onShare={shareInvite}
+        />
+      )}
+      {scoping && (
+        <ScopeSheet member={scoping} onClose={() => setScoping(null)} />
+      )}
       {removing && (
         <ConfirmSheet
           title="Remove from team?"
@@ -341,37 +418,51 @@ export default function SettingsPage() {
 }
 
 /** Choose between every property and a hand-picked list. */
-function ScopePicker({ value, onChange }: { value: Scope; onChange: (next: Scope) => void }) {
+function ScopePicker({
+  value,
+  onChange,
+}: {
+  value: Scope;
+  onChange: (next: Scope) => void;
+}) {
   const { workspace } = useWorkspace();
-  const properties = useQuery(api.properties.list, { workspaceId: workspace.workspaceId });
+  const properties = useQuery(api.properties.list, {
+    workspaceId: workspace.workspaceId,
+  });
   const picked = new Set<string>(value ?? []);
 
   return (
     <div className="field">
       <span className="label">Properties they can see</span>
       <div className="role-pick">
-        <button className={value === null ? "on" : ""} onClick={() => onChange(null)}>
+        <button
+          className={value === null ? "on" : ""}
+          onClick={() => onChange(null)}
+        >
           <span className="radio" />
           <div style={{ flex: 1 }}>
             <strong>All properties</strong>
             <span>Including any you add later</span>
           </div>
-          {value === null && <Check size={16} />}
         </button>
-        <button className={value !== null ? "on" : ""} onClick={() => value === null && onChange([])}>
+        <button
+          className={value !== null ? "on" : ""}
+          onClick={() => value === null && onChange([])}
+        >
           <span className="radio" />
           <div style={{ flex: 1 }}>
             <strong>Only selected properties</strong>
-            <span>They see those properties, their tenants and payments — nothing else</span>
+            <span>Just those properties, with their tenants and payments</span>
           </div>
-          {value !== null && <Check size={16} />}
         </button>
       </div>
       {value !== null &&
         (properties === undefined ? (
           <Spinner />
         ) : properties.length === 0 ? (
-          <p className="hint-text">You haven&apos;t added any properties yet.</p>
+          <p className="hint-text">
+            You haven&apos;t added any properties yet.
+          </p>
         ) : (
           <div className="chips">
             {properties.map((p) => (
@@ -381,7 +472,11 @@ function ScopePicker({ value, onChange }: { value: Scope; onChange: (next: Scope
                 className={`chip${picked.has(p._id) ? " on" : ""}`}
                 aria-pressed={picked.has(p._id)}
                 onClick={() =>
-                  onChange(picked.has(p._id) ? value.filter((id) => id !== p._id) : [...value, p._id])
+                  onChange(
+                    picked.has(p._id)
+                      ? value.filter((id) => id !== p._id)
+                      : [...value, p._id],
+                  )
                 }
               >
                 {picked.has(p._id) && <Check size={13} />} {p.name}
@@ -423,12 +518,14 @@ function ScopeSheet({
         </button>
       }
     >
-      <p className="muted" style={{ margin: 0 }}>{member.email}</p>
+      <p className="muted">{member.email}</p>
       <ScopePicker value={scope} onChange={setScopeValue} />
       {scope !== null && scope.length === 0 && (
         <div className="hint">
           <MailWarning size={18} />
-          <div>With no properties selected they&apos;ll see an empty workspace.</div>
+          <div>
+            With no properties selected they&apos;ll see an empty workspace.
+          </div>
         </div>
       )}
     </Sheet>
@@ -471,8 +568,10 @@ function AddMemberSheet({
           <UserPlus size={18} />
           <div>
             <strong>Now send them the invite link</strong>
-            Rent Ease doesn&apos;t email anyone. Share the link over WhatsApp or SMS — they sign in with{" "}
-            <strong>{added}</strong> and your workspace opens for them.
+            Rent Ease doesn&apos;t send emails. Share the link on WhatsApp or
+            SMS. They sign in with{" "}
+            <strong style={{ display: "inline" }}>{added}</strong> and your
+            workspace opens.
           </div>
         </div>
       </Sheet>
@@ -489,7 +588,12 @@ function AddMemberSheet({
           disabled={!email.includes("@") || busy}
           onClick={() =>
             run(async () => {
-              await add({ workspaceId, email, role, propertyIds: scope ?? undefined });
+              await add({
+                workspaceId,
+                email,
+                role,
+                propertyIds: scope ?? undefined,
+              });
               setAdded(email.trim().toLowerCase());
             }, "Added to your team")
           }
@@ -498,9 +602,12 @@ function AddMemberSheet({
         </button>
       }
     >
-      <Field label="Email address" hint="They must sign in to Rent Ease with exactly this email to get access.">
+      <Field
+        label="Email address"
+        hint="They must sign in to Rent Ease with exactly this email."
+      >
         <div className="input-wrap">
-          <Mail size={17} color="var(--ink-3)" />
+          <Mail size={17} />
           <input
             type="email"
             inputMode="email"
@@ -516,22 +623,21 @@ function AddMemberSheet({
         <span className="label">Access</span>
         <div className="role-pick">
           {ROLES.map((r) => (
-            <button key={r.value} className={role === r.value ? "on" : ""} onClick={() => setRole(r.value)}>
+            <button
+              key={r.value}
+              className={role === r.value ? "on" : ""}
+              onClick={() => setRole(r.value)}
+            >
               <span className="radio" />
               <div style={{ flex: 1 }}>
                 <strong>{r.label}</strong>
                 <span>{r.text}</span>
               </div>
-              {role === r.value && <Check size={16} />}
             </button>
           ))}
         </div>
       </div>
       <ScopePicker value={scope} onChange={setScope} />
-      <div className="hint">
-        <UserPlus size={18} />
-        <div>Only you, the owner, can manage the team and currency.</div>
-      </div>
     </Sheet>
   );
 }

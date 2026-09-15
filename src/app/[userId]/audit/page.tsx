@@ -21,9 +21,8 @@ import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import Header from "@/components/Header";
+import MonthSwitch from "@/components/MonthSwitch";
 import PaymentSheet, { type PayTarget } from "@/components/PaymentSheet";
-import PropertySheet, { type PropertyDraft } from "@/components/PropertySheet";
-import { kindOf } from "@/components/kinds";
 import {
   Avatar,
   ConfirmSheet,
@@ -35,7 +34,6 @@ import {
   Spinner,
   useRun,
 } from "@/components/ui";
-import MonthSwitch from "@/components/MonthSwitch";
 import { monthKey, monthLabel, today } from "@/lib/format";
 import { useWorkspace } from "@/lib/workspace";
 
@@ -49,18 +47,17 @@ type Action =
   | { kind: "tenant"; tenant: TenantRow }
   | { kind: "vacant"; property: PropertyRow; unit: UnitRow }
   | { kind: "place"; tenant: TenantRow }
-  | { kind: "moveOut"; tenant: TenantRow }
-  | { kind: "property"; draft: PropertyDraft };
+  | { kind: "moveOut"; tenant: TenantRow };
 
 function StatusBadge({ tenant }: { tenant: TenantRow }) {
   if (tenant.status === "paid") return <span className="badge ok">Paid</span>;
-  if (tenant.status === "partial") return <span className="badge warn">Partial</span>;
-  return <span className="badge">Due</span>;
+  if (tenant.status === "partial") return <span className="badge warn">Partly paid</span>;
+  return <span className="badge danger">Due</span>;
 }
 
 /**
- * Audit: every property, its units, who rents each one and whether they've
- * paid — and the place to add, move or remove tenants.
+ * All units: every property, its units, who rents each one and whether they've
+ * paid, and the place to place, move or remove tenants.
  */
 export default function AuditPage() {
   const { workspace, can, money, to, clampMonth } = useWorkspace();
@@ -93,20 +90,19 @@ export default function AuditPage() {
     return unit ? `${property.name} · ${unit.name}` : property.name;
   };
 
-  const newProperty = () => setAction({ kind: "property", draft: { name: "", kind: "villa", units: [] } });
   const pct = data && data.totals.expected > 0 ? Math.round((data.totals.collected / data.totals.expected) * 100) : 0;
 
   const tenantRow = (t: TenantRow, tag: string) => (
     <button className="row" key={t._id} onClick={() => setAction({ kind: "tenant", tenant: t })}>
-      <Avatar name={t.name} url={t.photoUrl} size={40} />
+      <Avatar name={t.name} url={t.photoUrl} />
       <div className="row-main">
         <span className="unit-tag">{tag}</span>
         <div className="row-title">{t.name}</div>
-        <div className="row-sub">
-          {t.status === "paid"
-            ? `Paid ${money(t.rent)} · ${t.phone}`
-            : `${money(t.remaining)} due of ${money(t.rent)} · ${t.phone}`}
-        </div>
+        {t.status !== "paid" && (
+          <div className="row-sub">
+            {money(t.remaining)} left of {money(t.rent)}
+          </div>
+        )}
       </div>
       <StatusBadge tenant={t} />
     </button>
@@ -131,44 +127,15 @@ export default function AuditPage() {
 
   return (
     <>
-      <Header
-        title="Audit"
-        actions={
-          canAdd && (
-            <button className="icon-btn dark" onClick={newProperty} aria-label="Add property">
-              <Plus size={20} />
-            </button>
-          )
-        }
-      />
+      <Header title="All units" back="/more" />
       <div className="page">
         <MonthSwitch month={month} onChange={setMonth} />
 
-        <div className="audit-summary">
-          <div className="stat">
-            <span className="stat-label">
-              <DoorOpen size={14} /> Rented
-            </span>
-            <span className="stat-value">
-              {data ? data.totals.occupied : "—"}
-              <span className="muted" style={{ fontSize: "calc(15px * var(--fs))" }}>
-                /{data ? data.totals.units : "—"}
-              </span>
-            </span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">
-              <Wallet size={14} /> Collected
-            </span>
-            <span className="stat-value">{data ? `${pct}%` : "—"}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">
-              <Users size={14} /> Still due
-            </span>
-            <span className="stat-value">{data ? data.totals.dueCount : "—"}</span>
-          </div>
-        </div>
+        {data && data.totals.units > 0 && (
+          <p className="lead">
+            {data.totals.occupied} of {data.totals.units} units rented. {pct}% of rent collected.
+          </p>
+        )}
 
         <Segmented
           value={filter}
@@ -185,14 +152,14 @@ export default function AuditPage() {
         ) : data.properties.length === 0 && data.unassigned.length === 0 ? (
           <div className="card">
             <Empty
-              icon={<Building2 size={22} />}
-              title="Nothing to audit yet"
+              icon={<Building2 size={24} />}
+              title="No units yet"
               text="Add a property with its units, then place tenants in them."
               action={
                 canAdd && (
-                  <button className="btn btn-primary btn-sm" onClick={newProperty}>
+                  <Link href={to("/properties?new=1")} className="btn btn-primary btn-sm">
                     <Plus size={16} /> Add property
-                  </button>
+                  </Link>
                 )
               }
             />
@@ -200,7 +167,7 @@ export default function AuditPage() {
         ) : visible.length === 0 && unassigned.length === 0 ? (
           <div className="card">
             <Empty
-              icon={filter === "due" ? <Wallet size={22} /> : <DoorOpen size={22} />}
+              icon={filter === "due" ? <Wallet size={24} /> : <DoorOpen size={24} />}
               title={filter === "due" ? "Nobody owes rent" : "No vacant units"}
               text={filter === "due" ? `Everyone has paid for ${monthLabel(month)}.` : "Every unit is rented."}
             />
@@ -208,96 +175,61 @@ export default function AuditPage() {
         ) : (
           <>
             {visible.map(({ property: p, units, withoutUnit }) => {
-              const { Icon } = kindOf(p.kind);
               const collectedPct = p.expected > 0 ? Math.round((p.collected / p.expected) * 100) : 0;
               const open = openIds.has(p._id);
-              const shown = units.length + withoutUnit.length;
               return (
                 <section className="card prop-block" key={p._id}>
-                  <div className="prop-block-head">
-                    <span className="kind-tile">
-                      <Icon size={22} />
-                    </span>
+                  <button className="prop-block-head" onClick={() => toggle(p._id)} aria-expanded={open}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <h3>{p.name}</h3>
                       <div className="row-sub">
-                        {p.occupied}/{p.units.length} rented · {money(p.collected)} of {money(p.expected)}
+                        {p.occupied} of {p.units.length} rented · {money(p.collected)} of {money(p.expected)}
                       </div>
                       <div className="prop-meter">
                         <span style={{ width: `${collectedPct}%` }} />
                       </div>
                     </div>
-                    {can("edit") && (
-                      <button
-                        className="icon-btn sm plain"
-                        aria-label={`Edit ${p.name}`}
-                        onClick={() =>
-                          setAction({
-                            kind: "property",
-                            draft: {
-                              _id: p._id,
-                              name: p.name,
-                              kind: p.kind,
-                              address: p.address ?? undefined,
-                              notes: p.notes,
-                              units: p.units.map((u) => ({ _id: u._id, name: u.name, occupant: u.tenant?.name ?? null })),
-                            },
-                          })
-                        }
-                      >
-                        <Pencil size={15} />
-                      </button>
-                    )}
-                  </div>
-                  {open && (
-                  <div className="list">
-                    {p.units.length === 0 && (
-                      <div className="row">
-                        <span className="row-icon">
-                          <DoorOpen size={18} />
-                        </span>
-                        <div className="row-main">
-                          <div className="row-title muted">No units yet</div>
-                          <div className="row-sub">Edit the property to add its units.</div>
-                        </div>
-                      </div>
-                    )}
-                    {units.map((u) =>
-                      u.tenant ? (
-                        tenantRow(u.tenant, u.name)
-                      ) : (
-                        <button
-                          className="row"
-                          key={u._id}
-                          disabled={!can("edit")}
-                          onClick={() => setAction({ kind: "vacant", property: p, unit: u })}
-                        >
-                          <span className="row-icon">
-                            <DoorOpen size={18} />
-                          </span>
-                          <div className="row-main">
-                            <span className="unit-tag">{u.name}</span>
-                            <div className="row-title muted">Vacant</div>
-                          </div>
-                          {can("edit") && (
-                            <span className="badge">
-                              <Plus size={12} /> Add
-                            </span>
-                          )}
-                        </button>
-                      ),
-                    )}
-                    {withoutUnit.map((t) => tenantRow(t, "No unit set"))}
-                  </div>
-                  )}
-                  <button className="prop-toggle" onClick={() => toggle(p._id)} aria-expanded={open}>
-                    {open
-                      ? "Hide units"
-                      : shown === 0
-                        ? "Show details"
-                        : `Show ${shown} ${filter === "vacant" ? "vacant " : filter === "due" ? "due " : ""}unit${shown === 1 ? "" : "s"}${p.dueCount && filter === "all" ? ` · ${p.dueCount} due` : ""}`}
-                    <ChevronDown size={16} className={open ? "flip" : ""} />
+                    {filter === "all" && p.dueCount > 0 && <span className="badge danger">{p.dueCount} due</span>}
+                    <ChevronDown size={18} className={`chev${open ? " flip" : ""}`} />
                   </button>
+                  {open && (
+                    <div className="list">
+                      {p.units.length === 0 && (
+                        <div className="row">
+                          <div className="row-main">
+                            <div className="row-title muted">No units yet</div>
+                            <div className="row-sub">Edit the property to add its units.</div>
+                          </div>
+                        </div>
+                      )}
+                      {units.map((u) =>
+                        u.tenant ? (
+                          tenantRow(u.tenant, u.name)
+                        ) : (
+                          <button
+                            className="row"
+                            key={u._id}
+                            disabled={!can("edit")}
+                            onClick={() => setAction({ kind: "vacant", property: p, unit: u })}
+                          >
+                            <span className="avatar vacant" style={{ width: 40, height: 40 }}>
+                              <DoorOpen size={17} />
+                            </span>
+                            <div className="row-main">
+                              <span className="unit-tag">{u.name}</span>
+                              <div className="row-title muted">Vacant</div>
+                            </div>
+                            {can("edit") && (
+                              <span className="badge">
+                                <Plus size={12} /> Add
+                              </span>
+                            )}
+                          </button>
+                        ),
+                      )}
+                      {withoutUnit.map((t) => tenantRow(t, "No unit set"))}
+                    </div>
+                  )}
                 </section>
               );
             })}
@@ -318,13 +250,13 @@ export default function AuditPage() {
       {action?.kind === "tenant" && (
         <Sheet title={action.tenant.name} onClose={() => setAction(null)}>
           <div className="account" style={{ padding: 0 }}>
-            <Avatar name={action.tenant.name} url={action.tenant.photoUrl} size={52} />
+            <Avatar name={action.tenant.name} url={action.tenant.photoUrl} size={48} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <strong>{placeOf(action.tenant) ?? "Not placed in a property"}</strong>
               <div className="row-sub">
                 {action.tenant.status === "paid"
                   ? `Paid ${money(action.tenant.rent)} for ${monthLabel(month)}`
-                  : `${money(action.tenant.remaining)} due of ${money(action.tenant.rent)}`}
+                  : `${money(action.tenant.remaining)} left of ${money(action.tenant.rent)}`}
               </div>
             </div>
             <StatusBadge tenant={action.tenant} />
@@ -414,7 +346,7 @@ export default function AuditPage() {
             This unit is vacant. Place one of your current tenants here, or add a new tenant.
           </p>
           {data.tenants.length === 0 ? (
-            <Empty icon={<Users size={22} />} title="No current tenants" text="Add a new tenant for this unit." />
+            <Empty icon={<Users size={24} />} title="No current tenants" text="Add a new tenant for this unit." />
           ) : (
             <div className="card list">
               {[...data.tenants]
@@ -431,7 +363,7 @@ export default function AuditPage() {
                       }, `${t.name} placed in ${unit.name}`);
                     }}
                   >
-                    <Avatar name={t.name} url={t.photoUrl} size={40} />
+                    <Avatar name={t.name} url={t.photoUrl} />
                     <div className="row-main">
                       <div className="row-title">{t.name}</div>
                       <div className="row-sub">{placeOf(t) ? `Now at ${placeOf(t)}` : "Not placed yet"}</div>
@@ -451,14 +383,12 @@ export default function AuditPage() {
       {action?.kind === "moveOut" && (
         <ConfirmSheet
           title={`Move out ${action.tenant.name}?`}
-          text="They'll be marked as a former tenant and their unit becomes vacant. Their details, payments and notes stay in history."
+          text="They'll be listed as a former tenant and their unit becomes vacant. Their details, payments and notes stay."
           confirmLabel="Move out"
           onClose={() => setAction(null)}
           onConfirm={() => moveOut({ tenantId: action.tenant._id, date: today() })}
         />
       )}
-
-      {action?.kind === "property" && <PropertySheet property={action.draft} onClose={() => setAction(null)} />}
 
       {pay && <PaymentSheet target={pay} onClose={() => setPay(null)} />}
     </>
@@ -517,7 +447,7 @@ function PlaceSheet({ data, tenant, onClose }: { data: Overview; tenant: TenantR
         <Field
           label="Unit"
           required
-          hint={property.units.length === 0 ? "This property has no units yet — edit it to add some." : undefined}
+          hint={property.units.length === 0 ? "This property has no units yet. Edit it to add some." : undefined}
         >
           <select className="input" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
             <option value="">Choose a unit</option>
@@ -526,7 +456,7 @@ function PlaceSheet({ data, tenant, onClose }: { data: Overview; tenant: TenantR
               return (
                 <option key={u._id} value={u._id} disabled={taken}>
                   {u.name}
-                  {taken ? ` — rented to ${u.tenant!.name}` : u.tenant ? " (current)" : ""}
+                  {taken ? ` (rented to ${u.tenant!.name})` : u.tenant ? " (current)" : ""}
                 </option>
               );
             })}
