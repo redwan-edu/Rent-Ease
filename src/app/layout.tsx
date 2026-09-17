@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import BootScreen from "@/components/BootScreen";
 import ConvexClientProvider from "@/components/ConvexClientProvider";
 import { clerkAppearance } from "@/lib/clerkAppearance";
 import ThemeSync from "@/components/ThemeSync";
 import { fontScaleBootScript } from "@/lib/fontScale";
+import { installedBootScript } from "@/lib/installed";
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 import { themeBootScript } from "@/lib/theme";
 import "./globals.css";
@@ -50,9 +52,15 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: fontScaleBootScript }} />
         {/* Same for light/dark, so a dark-mode user never sees a white flash. */}
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        {/* Flag home-screen launches, so only they get the boot loading screen. */}
+        <script dangerouslySetInnerHTML={{ __html: installedBootScript }} />
+        {/* The boot screen's logo has to be on screen in its first frame. */}
+        <link rel="preload" as="image" href="/logo.png" fetchPriority="high" />
       </head>
       <body>
         <ThemeSync />
+        {/* Installed apps only: holds the loading state from the first paint. */}
+        <BootScreen />
         {/* Keep every auth step — sign up, email codes, forgot/reset password — inside
             the app instead of Clerk's hosted pages, and land in /app afterwards. */}
         <ClerkProvider

@@ -3411,3 +3411,29 @@ button.hint {
   font-size: calc(12.5px * var(--fs));
   color: var(--ink-3);
 }
+
+/* ─── Installed app boot screen ─── */
+
+/*
+ * An installed app opens on the platform's own splash — the icon alone on a flat
+ * background — which stays up until this page paints. #boot makes that first paint
+ * the app's loading state, so the icon hands over to a loading screen instead of
+ * blinking away into one. Browser tabs never show it: the boot script in <head>
+ * only sets data-installed for home-screen and standalone-window launches, and
+ * data-booted is set as soon as React is rendering the same loading state itself.
+ */
+
+#boot {
+  display: none;
+}
+
+html[data-installed]:not([data-booted]) #boot {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  padding-top: var(--safe-t);
+  padding-bottom: var(--safe-b);
+}
