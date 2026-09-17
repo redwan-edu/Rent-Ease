@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import InstallAppButton from "@/components/InstallAppButton";
 import { Avatar, Logo } from "@/components/ui";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
@@ -121,13 +122,17 @@ const jsonLd = {
 export default async function Landing() {
   const { userId } = await auth();
   const signedIn = !!userId;
-  const primary = signedIn ? { href: "/app", label: "Open app" } : { href: "/sign-up", label: "Get started" };
+  const primary = signedIn
+    ? { href: "/app", label: "Open app" }
+    : { href: "/sign-up", label: "Get started" };
 
   return (
     <div className="landing">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+        }}
       />
 
       <header className="landing-nav">
@@ -136,11 +141,12 @@ export default async function Landing() {
           <span>Rent Ease</span>
         </Link>
         <nav className="landing-nav-actions" aria-label="Account">
-          {!signedIn && (
+          <InstallAppButton />
+          {/* {!signedIn && (
             <Link href="/sign-in" className="btn btn-ghost btn-sm">
               Sign in
             </Link>
-          )}
+          )} */}
           <Link href={primary.href} className="btn btn-primary btn-sm">
             {primary.label}
           </Link>
@@ -152,15 +158,15 @@ export default async function Landing() {
           <div className="landing-copy">
             <h1 id="hero-title">Rent tracking for landlords, made simple.</h1>
             <p>
-              See who paid and what&apos;s left this month. Rent Ease keeps tenants, properties and payments on your
-              phone.
+              See who paid and what&apos;s left this month. Rent Ease keeps
+              tenants, properties and payments on your phone.
             </p>
             <div className="landing-cta">
               <Link href={primary.href} className="btn btn-primary">
                 {primary.label} <ArrowRight size={17} />
               </Link>
               {!signedIn && (
-                <Link href="/sign-in" className="btn btn-secondary">
+                <Link href="/sign-in" className="btn btn-ghost">
                   Sign in
                 </Link>
               )}
@@ -189,8 +195,16 @@ export default async function Landing() {
             </div>
             <div className="card list">
               {[
-                { name: "Ayesha Rahman", place: "Lakeview Villa · Flat 2B", amount: "৳15,000" },
-                { name: "Tanvir Hasan", place: "Green House · Unit 1", amount: "৳12,500" },
+                {
+                  name: "Ayesha Rahman",
+                  place: "Lakeview Villa · Flat 2B",
+                  amount: "৳15,000",
+                },
+                {
+                  name: "Tanvir Hasan",
+                  place: "Green House · Unit 1",
+                  amount: "৳12,500",
+                },
               ].map((t) => (
                 <div className="row" key={t.name}>
                   <Avatar name={t.name} />
@@ -207,7 +221,10 @@ export default async function Landing() {
 
         <section className="landing-section" aria-labelledby="how-title">
           <h2 id="how-title">How Rent Ease works</h2>
-          <p className="landing-intro">Set up once in a few minutes. After that, each month takes a few taps.</p>
+          <p className="landing-intro">
+            Set up once in a few minutes. After that, each month takes a few
+            taps.
+          </p>
           <ol className="landing-steps">
             {steps.map((s) => (
               <li key={s.title}>
@@ -221,7 +238,8 @@ export default async function Landing() {
         <section className="landing-section" aria-labelledby="features-title">
           <h2 id="features-title">Everything a small landlord needs</h2>
           <p className="landing-intro">
-            No spreadsheets or notebooks. Rent, tenants and follow-ups stay together and up to date.
+            No spreadsheets or notebooks. Rent, tenants and follow-ups stay
+            together and up to date.
           </p>
           <div className="landing-points">
             {features.map((f) => (
@@ -245,7 +263,10 @@ export default async function Landing() {
           </div>
         </section>
 
-        <section className="landing-section landing-final" aria-labelledby="final-title">
+        <section
+          className="landing-section landing-final"
+          aria-labelledby="final-title"
+        >
           <h2 id="final-title">Know where your rent stands, every month.</h2>
           <div className="landing-cta">
             <Link href={primary.href} className="btn btn-primary">
@@ -262,6 +283,7 @@ export default async function Landing() {
           <Link href={primary.href}>{primary.label}</Link>
         </nav>
       </footer>
+      <div id="sheet-root" />
     </div>
   );
 }

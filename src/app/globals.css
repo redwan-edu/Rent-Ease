@@ -41,7 +41,11 @@
   --on-danger: #ffffff;
   --danger-hover: #862624;
   --danger-soft-hover: #fadadc;
-  --font: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font:
+    var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --nav-brand-bg: var(--sunken);
+  --nav-brand-bg-hover: #e4e2dc;
 }
 
 /* Dark theme: chosen in Settings, remembered per device (see src/lib/theme.ts). */
@@ -69,6 +73,8 @@
   --on-danger: #141413;
   --danger-hover: #f5aaa8;
   --danger-soft-hover: #472828;
+  --nav-brand-bg: #0d0d0c;
+  --nav-brand-bg-hover: #050505;
 }
 
 * {
@@ -234,7 +240,8 @@ img {
   /* Side padding keeps the bar aligned with the centred .page column. */
   --gutter: 20px;
   min-height: calc(var(--safe-t) + 64px);
-  padding: calc(var(--safe-t) + 10px) max(var(--gutter), calc((100% - 720px) / 2 + var(--gutter))) 10px;
+  padding: calc(var(--safe-t) + 10px)
+    max(var(--gutter), calc((100% - 720px) / 2 + var(--gutter))) 10px;
   background: color-mix(in srgb, var(--bg) 90%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -310,9 +317,9 @@ img {
 .nav-icon {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 28px;
-  border-radius: 14px;
+  width: 48px;
+  height: 32px;
+  border-radius: var(--r-ctl);
   transition: background-color 0.2s;
 }
 
@@ -324,18 +331,37 @@ img {
   background: var(--sunken);
 }
 
+.nav-links {
+  display: contents;
+}
+
+.nav-foot {
+  display: none;
+}
+
 @container screen (min-width: 1024px) {
   .nav {
     top: 0;
+    bottom: 0;
     right: auto;
     width: var(--rail-w);
-    height: auto;
+    height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
     padding: 20px 12px;
     border-top: 0;
     border-right: 1px solid var(--line);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 32px;
+    width: 100%;
   }
 
   .nav a {
@@ -350,12 +376,40 @@ img {
 
   .nav .nav-brand {
     display: flex;
-    height: auto;
-    margin-bottom: 18px;
-    font-size: calc(16px * var(--fs));
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 58px;
+    padding: 12px 16px;
+    border-radius: var(--r-card);
+    box-shadow: inset 0 0 0 1px var(--line);
+    text-decoration: none;
+    background: var(--nav-brand-bg);
+    margin-bottom: 0;
+    font-size: calc(22px * var(--fs));
     font-weight: 650;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
     color: var(--ink);
+    transition:
+      background-color 0.15s,
+      opacity 0.15s,
+      transform 0.1s;
+  }
+
+  .nav .nav-brand span,
+  .nav-brand-title {
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .nav .nav-brand:active {
+    transform: scale(0.99);
   }
 
   .nav a.active {
@@ -369,6 +423,68 @@ img {
   .nav-icon {
     width: 20px;
     height: 20px;
+  }
+
+  .nav-foot {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+
+  .nav-account {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: var(--surface);
+    border-radius: var(--r-card);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+
+  .nav-account-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .nav-account-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .nav-account-name {
+    font-size: calc(13.5px * var(--fs));
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .nav-account-email {
+    font-size: calc(12px * var(--fs));
+    color: var(--ink-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .nav-account-manage {
+    height: 30px;
+    padding: 0 8px;
+    font-size: calc(12.5px * var(--fs));
+    font-weight: 550;
+  }
+
+  .nav-signout {
+    height: 38px;
+    padding: 0 12px;
+    font-size: calc(13.5px * var(--fs));
+    gap: 6px;
   }
 
   .scroll:not(.no-nav) {
@@ -2591,6 +2707,11 @@ button.hint {
   padding: calc(var(--safe-t) + 48px) 20px calc(var(--safe-b) + 32px);
 }
 
+.auth-brand-side,
+.auth-card-side {
+  display: contents;
+}
+
 .auth-brand {
   display: flex;
   flex-direction: column;
@@ -2617,6 +2738,96 @@ button.hint {
   max-width: 420px;
   display: flex;
   justify-content: center;
+}
+
+@container screen (min-width: 1024px) {
+  .auth {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "card brand";
+    gap: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .auth-card-side {
+    grid-area: card;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 40px 32px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .auth-card-side::-webkit-scrollbar {
+    display: none;
+  }
+
+  .auth-card-side .auth-card {
+    margin: auto 0;
+  }
+
+  .auth-brand-side {
+    grid-area: brand;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 40px 32px;
+    background: var(--surface-2);
+    border-left: 1px solid var(--line);
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 1024px) {
+  .auth {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "card brand";
+    gap: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .auth-card-side {
+    grid-area: card;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 40px 32px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .auth-card-side::-webkit-scrollbar {
+    display: none;
+  }
+
+  .auth-card-side .auth-card {
+    margin: auto 0;
+  }
+
+  .auth-brand-side {
+    grid-area: brand;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 40px 32px;
+    background: var(--surface-2);
+    border-left: 1px solid var(--line);
+    overflow: hidden;
+  }
 }
 
 .join {
@@ -2681,7 +2892,8 @@ button.hint {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: calc(var(--safe-t) + 12px) max(20px, calc((100% - 1040px) / 2 + 20px)) 12px;
+  padding: calc(var(--safe-t) + 12px)
+    max(20px, calc((100% - 1040px) / 2 + 20px)) 12px;
   background: color-mix(in srgb, var(--bg) 90%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -2689,7 +2901,19 @@ button.hint {
 
 .landing-nav-actions {
   display: flex;
+  align-items: center;
   gap: 6px;
+}
+
+@media (max-width: 480px) {
+  .landing-nav-actions {
+    gap: 4px;
+  }
+  .landing-nav-actions .btn-sm {
+    height: 32px;
+    padding: 0 8px;
+    font-size: calc(13px * var(--fs));
+  }
 }
 
 .landing-hero {
@@ -2900,6 +3124,10 @@ button.hint {
 
   .nav a:not(.active):not(.nav-brand):hover {
     color: var(--ink-2);
+  }
+
+  .nav .nav-brand:hover {
+    background: var(--nav-brand-bg-hover);
   }
 
   button.chip:not(.on):not(:disabled):hover,

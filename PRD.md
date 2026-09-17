@@ -214,7 +214,7 @@ All app pages live under `/[userId]`, where `userId` is the **workspace owner's*
 
 **Shell rules:**
 
-- **Navigation**: the bottom bar has Home, Tenants, Properties, Notes and More, and becomes a side rail on wide screens (≥1024px container width).
+- **Navigation**: the bottom bar has Home, Tenants, Properties, Notes and More, and becomes a side rail on wide screens (≥1024px container width) with the user's profile card and sign out button at the bottom.
 - **Navigation hidden** on `/new`, `/edit` and `/family/*` routes.
 - **Header**: tab pages show a large title and the bell; sub pages show a back arrow and a small title, with no bell.
 - **Sheets**: bottom sheets on phones, centred dialogs on wide screens. They portal into `#sheet-root`.

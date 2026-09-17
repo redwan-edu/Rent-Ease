@@ -21,7 +21,10 @@ export default function Dashboard() {
   const workspaceId = workspace.workspaceId;
   const [month, setMonth] = useState(() => clampMonth(monthKey()));
   const summary = useQuery(api.payments.summary, { workspaceId, month });
-  const arrears = useQuery(api.payments.arrears, { workspaceId, today: monthKey() });
+  const arrears = useQuery(api.payments.arrears, {
+    workspaceId,
+    today: monthKey(),
+  });
   const upcoming = useQuery(api.notes.upcoming, { workspaceId });
   const [pay, setPay] = useState<PayTarget | null>(null);
 
@@ -48,17 +51,30 @@ export default function Dashboard() {
           <>
             <MonthSwitch month={month} onChange={setMonth} />
 
-            <section className="card summary" aria-label={`Rent for ${monthLabel(month)}`}>
+            <section
+              className="card summary"
+              aria-label={`Rent for ${monthLabel(month)}`}
+            >
               <span className="summary-label">Collected</span>
               {summary ? (
                 <>
-                  <div className="summary-amount">{money(summary.collected)}</div>
-                  <div className="summary-sub">of {money(summary.expected)} expected</div>
+                  <div className="summary-amount">
+                    {money(summary.collected)}
+                  </div>
+                  <div className="summary-sub">
+                    of {money(summary.expected)} expected
+                  </div>
                 </>
               ) : (
                 <>
-                  <span className="skeleton" style={{ height: 36, width: "50%", marginTop: 6 }} />
-                  <span className="skeleton" style={{ height: 14, width: "35%", marginTop: 8 }} />
+                  <span
+                    className="skeleton"
+                    style={{ height: 36, width: "50%", marginTop: 6 }}
+                  />
+                  <span
+                    className="skeleton"
+                    style={{ height: 14, width: "35%", marginTop: 8 }}
+                  />
                 </>
               )}
               <div className="meter">
@@ -67,13 +83,19 @@ export default function Dashboard() {
               <div className="summary-foot">
                 <div>
                   <span>Left to collect</span>
-                  <strong className={summary && summary.left > 0 ? "warn" : undefined}>
+                  <strong
+                    className={summary && summary.left > 0 ? "warn" : undefined}
+                  >
                     {summary ? money(summary.left) : " "}
                   </strong>
                 </div>
                 <div>
                   <span>Paid in full</span>
-                  <strong>{summary ? `${summary.paidCount} of ${summary.tenantCount}` : " "}</strong>
+                  <strong>
+                    {summary
+                      ? `${summary.paidCount} of ${summary.tenantCount}`
+                      : " "}
+                  </strong>
                 </div>
               </div>
             </section>
@@ -81,9 +103,13 @@ export default function Dashboard() {
             {arrears && arrears.total > 0 && (
               <Link href={to("/arrears")} className="card row callout">
                 <div className="row-main">
-                  <div className="row-title">{money(arrears.total)} owed from earlier months</div>
+                  <div className="row-title">
+                    {money(arrears.total)} owed from earlier months
+                  </div>
                   <div className="row-sub">
-                    {arrears.tenants.length} {arrears.tenants.length === 1 ? "tenant" : "tenants"} behind, oldest from{" "}
+                    {arrears.tenants.length}{" "}
+                    {arrears.tenants.length === 1 ? "tenant" : "tenants"}{" "}
+                    behind, oldest from{" "}
                     {monthLabel(arrears.oldest ?? arrears.startMonth)}
                   </div>
                 </div>
@@ -106,7 +132,9 @@ export default function Dashboard() {
               {!summary ? (
                 <SkeletonList rows={2} />
               ) : summary.tenantCount === 0 ? (
-                <p className="section-empty">No rent is due for {monthLabel(month)}.</p>
+                <p className="section-empty">
+                  No rent is due for {monthLabel(month)}.
+                </p>
               ) : summary.due.length === 0 ? (
                 <div className="card">
                   <Empty
@@ -116,7 +144,10 @@ export default function Dashboard() {
                   />
                 </div>
               ) : (
-                <DueList tenants={summary.due.slice(0, DUE_PREVIEW)} onCollect={(t) => setPay({ ...t, month })} />
+                <DueList
+                  tenants={summary.due.slice(0, DUE_PREVIEW)}
+                  onCollect={(t) => setPay({ ...t, month })}
+                />
               )}
             </Section>
 
@@ -203,13 +234,18 @@ function GetStarted({ hasProperty }: { hasProperty: boolean }) {
       <div className="card list">
         {steps.map((s, i) => (
           <div className={`row step${s.done ? " done" : ""}`} key={s.title}>
-            <span className="step-mark">{s.done ? <Check size={14} strokeWidth={3} /> : i + 1}</span>
+            <span className="step-mark">
+              {s.done ? <Check size={14} strokeWidth={3} /> : i + 1}
+            </span>
             <div className="row-main">
               <div className="row-title">{s.title}</div>
               <div className="row-sub">{s.text}</div>
             </div>
             {!s.done && s.href && (
-              <Link href={s.href} className={`btn btn-sm ${i === next ? "btn-primary" : "btn-secondary"}`}>
+              <Link
+                href={s.href}
+                className={`btn btn-sm ${i === next ? "btn-primary" : "btn-secondary"}`}
+              >
                 Add
               </Link>
             )}
